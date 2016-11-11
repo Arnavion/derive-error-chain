@@ -3,6 +3,58 @@
 #![recursion_limit = "300"]
 
 //! A Macros 1.1 implementation of https://crates.io/crates/error-chain
+//!
+//! The error-chain example
+//!
+//! ```ignore
+//! error_chain {
+//!     types { Error, ErrorKind, ChainErr, Result; }
+//!
+//!     links {
+//!     	rustup_dist::Error, rustup_dist::ErrorKind, Dist;
+//!     	rustup_utils::Error, rustup_utils::ErrorKind, Utils;
+//!     }
+//!
+//!     foreign_links {
+//!     	temp::Error, Temp;
+//!     }
+//!
+//!     errors {
+//!     	InvalidToolchainName(t: String) {
+//!     		description("invalid toolchain name")
+//!     		display("invalid toolchain name: '{}'", t)
+//!     	}
+//!     }
+//! }
+//! ```
+//!
+//! becomes
+//!
+//! ```ignore
+//! #[derive(Debug, error_chain)]
+//! #[error_chain(error = "Error", result = "Result")] // This attribute is optional if using the default names "Error" and "Result"
+//! pub struct ErrorKind {
+//!     Dist(rustup_dist::Error, rustup_dist::ErrorKind),
+//!
+//!     Utils(rustup_utils::Error, rustup_utils::ErrorKind),
+//!
+//!     #[error_chain(foreign)]
+//!     Temp(temp::Error),
+//!
+//!     #[error_chain(custom)]
+//!     InvalidToolchainName(String),
+//! }
+//! ```
+//!
+//! Other differences from error-chain are:
+//!
+//! - This macro's output can be used with #[deny(missing_docs)] since it allows doc comments on the ErrorKind variants.
+//! - This macro uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
+//!
+//! Not supported yet:
+//!
+//! - `ChainErr`
+//! - `description()` and `display()`
 
 extern crate proc_macro;
 #[macro_use]
