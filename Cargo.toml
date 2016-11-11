@@ -1,0 +1,11 @@
+[package]
+name = "derive-error-chain"
+version = "0.1.0"
+authors = ["Arnavion <arnavion@gmail.com>"]
+
+[dependencies]
+quote = "0.3.x"
+syn = "0.10.x"
+
+[lib]
+proc-macro = true
