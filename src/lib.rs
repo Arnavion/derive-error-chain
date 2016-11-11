@@ -33,7 +33,7 @@
 //! ```ignore
 //! #[derive(Debug, error_chain)]
 //! #[error_chain(error = "Error", result = "Result")] // This attribute is optional if using the default names "Error" and "Result"
-//! pub struct ErrorKind {
+//! pub enum ErrorKind {
 //!     Dist(rustup_dist::Error, rustup_dist::ErrorKind),
 //!
 //!     Utils(rustup_utils::Error, rustup_utils::ErrorKind),
@@ -48,7 +48,7 @@
 //!
 //! Other differences from error-chain are:
 //!
-//! - This macro's output can be used with #[deny(missing_docs)] since it allows doc comments on the ErrorKind variants.
+//! - This macro's output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
 //! - This macro uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
 //!
 //! Not supported yet:
