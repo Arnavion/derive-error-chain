@@ -1,0 +1,8 @@
+[package]
+name = "derive-error-chain-tests"
+version = "0.1.0"
+authors = ["Arnavion <arnavion@gmail.com>"]
+
+[dependencies]
+backtrace = "0.3.x"
+derive-error-chain = { path = "../derive-error-chain" }
