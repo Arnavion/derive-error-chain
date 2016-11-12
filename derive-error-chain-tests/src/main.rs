@@ -1,11 +1,18 @@
 #![allow(dead_code)]
 #![feature(conservative_impl_trait, proc_macro)]
 
+//! Test crate for derive-error-chain. If it runs, it's tested.
+
 extern crate backtrace;
 #[macro_use]
 extern crate derive_error_chain;
 
 fn main() {
+	smoke_test_1();
+	smoke_test_2();
+	smoke_test_4();
+	smoke_test_8();
+
 	has_backtrace_depending_on_env();
 	
 	foreign_link_test::display_underlying_error();
@@ -29,8 +36,20 @@ fn smoke_test_2() {
 fn smoke_test_4() {
 	#[derive(Debug, error_chain)]
 	enum ErrorKind {
-		#[error_chain(custom)]
+		#[error_chain(custom, description = "http_status_description", display = "http_status_display")]
 		HttpStatus(u32),
+	}
+
+	let err: Error = ErrorKind::HttpStatus(5).into();
+	assert_eq!("http request returned an unsuccessful status code", ::std::error::Error::description(&err));
+	assert_eq!("http request returned an unsuccessful status code: 5".to_string(), format!("{}", err));
+
+	fn http_status_description(_: &u32) -> &str {
+		"http request returned an unsuccessful status code"
+	}
+
+	fn http_status_display(f: &mut ::std::fmt::Formatter, e: &u32) -> ::std::fmt::Result {
+		write!(f, "http request returned an unsuccessful status code: {}", e)
 	}
 }
 

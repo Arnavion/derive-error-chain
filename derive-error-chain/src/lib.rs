@@ -41,8 +41,18 @@
 //!     #[error_chain(foreign)]
 //!     Temp(temp::Error),
 //!
-//!     #[error_chain(custom)]
+//!     #[error_chain(custom, description = "invalid_toolchain_name_description", display = "invalid_toolchain_name_display")]
 //!     InvalidToolchainName(String),
+//! }
+//!
+//! // A description function receives refs to all the variant constituents, and should return a &str
+//! fn invalid_toolchain_name_description(_: &str) -> &str {
+//!     "invalid toolchain name"
+//! }
+//!
+//! // A display function receives a formatter and refs to all the variant constituents, and should return a ::std::fmt::Result
+//! fn invalid_toolchain_name_display(f: &mut ::std::fmt::Formatter, t: &str) -> ::std::fmt::Result {
+//!     write!(f, "invalid toolchain name: '{}'", t)
 //! }
 //! ```
 //!
@@ -50,11 +60,6 @@
 //!
 //! - This macro's output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
 //! - This macro uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
-//!
-//! Not supported yet:
-//!
-//! - `ChainErr`
-//! - `description()` and `display()`
 
 extern crate proc_macro;
 #[macro_use]
@@ -101,10 +106,13 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 	let error_chain_iter_name = syn::Ident::from(error_name.to_string() + "ChainIter");
 	let make_backtrace_name = syn::Ident::from(error_name.to_string() + "_make_backtrace");
+	let chain_err_name = syn::Ident::from(error_name.to_string() + "ChainErr");
 
 	struct Link {
 		variant: syn::Variant,
 		link_type: LinkType,
+		custom_description: Option<syn::Path>,
+		custom_display: Option<syn::Path>,
 	}
 
 	enum LinkType {
@@ -120,6 +128,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 			for variant in variants {
 				let mut attrs = vec![];
 				let mut link_type = LinkType::Chainable;
+				let mut custom_description = None;
+				let mut custom_display = None;
 
 				for attr in variant.attrs {
 					let mut suppress_attr = false;
@@ -128,14 +138,28 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						if ident.to_string() == "error_chain" {
 							suppress_attr = true;
 
-							if nested_meta_items.len() == 1 {
-								match nested_meta_items[0] {
-									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) if ident.to_string() == "foreign" => {
-										link_type = LinkType::Foreign;
+							for nested_meta_item in nested_meta_items {
+								match *nested_meta_item {
+									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) => {
+										let ident = ident.to_string();
+
+										if ident == "foreign" {
+											link_type = LinkType::Foreign;
+										}
+										else if ident == "custom" {
+											link_type = LinkType::Custom;
+										}
 									},
 
-									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) if ident.to_string() == "custom" => {
-										link_type = LinkType::Custom;
+									syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
+										let ident = ident.to_string();
+
+										if ident == "description" {
+											custom_description = Some(syn::Path::from(value.clone()));
+										}
+										else if ident == "display" {
+											custom_display = Some(syn::Path::from(value.clone()));
+										}
 									},
 
 									_ => { },
@@ -151,55 +175,82 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 				let variant = syn::Variant { attrs: attrs, .. variant };
 
-				links.push(Link { variant: variant, link_type: link_type });
+				links.push(Link {
+					variant: variant,
+					link_type: link_type,
+					custom_description: custom_description,
+					custom_display: custom_display,
+				});
 			}
 
 			let variants = links.iter().map(|link| &link.variant);
 
 			let error_kind_description_cases = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable => {
+				LinkType::Chainable | LinkType::Foreign => {
 					let variant_name = &link.variant.ident;
-					quote! {
-						#error_kind_name::#variant_name(ref err) => err.description(),
-					}
-				},
+					match link.custom_description {
+						Some(ref custom_description) => quote! {
+							#error_kind_name::#variant_name(ref err) => #custom_description(err),
+						},
 
-				LinkType::Foreign => {
-					let variant_name = &link.variant.ident;
-					quote! {
-						#error_kind_name::#variant_name(ref err) => ::std::error::Error::description(err),
+						None => quote! {
+							#error_kind_name::#variant_name(ref err) => ::std::error::Error::description(err),
+						},
 					}
 				},
 
 				LinkType::Custom => {
 					let variant_name = &link.variant.ident;
-					let fields_match = pattern(&link.variant);
-					quote! {
-						#error_kind_name::#variant_name #fields_match => stringify!(#variant_name),
+					match link.custom_description {
+						Some(ref custom_description) => {
+							let pattern = fields_pattern(&link.variant);
+							let args = args(&link.variant);
+							quote! {
+								#error_kind_name::#variant_name #pattern => #custom_description(#args),
+							}
+						},
+
+						None => {
+							let pattern = fields_pattern_ignore(&link.variant);
+							quote! {
+								#error_kind_name::#variant_name #pattern => stringify!(#variant_name),
+							}
+						},
 					}
 				},
 			});
 
 			let error_kind_display_cases = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable => {
+				LinkType::Chainable | LinkType::Foreign => {
 					let variant_name = &link.variant.ident;
-					quote! {
-						#error_kind_name::#variant_name(ref err) => write!(f, "{}", err),
-					}
-				},
+					match link.custom_display {
+						Some(ref custom_display) => quote! {
+							#error_kind_name::#variant_name(ref err) => #custom_display(f, err),
+						},
 
-				LinkType::Foreign => {
-					let variant_name = &link.variant.ident;
-					quote! {
-						#error_kind_name::#variant_name(ref err) => write!(f, "{}", err),
+						None => quote! {
+							#error_kind_name::#variant_name(ref err) => write!(f, "{}", err),
+						},
 					}
 				},
 
 				LinkType::Custom => {
 					let variant_name = &link.variant.ident;
-					let fields_match = pattern(&link.variant);
-					quote! {
-						#error_kind_name::#variant_name #fields_match => write!(f, "{}", self.description()),
+					match link.custom_display {
+						Some(ref custom_display) => {
+							let pattern = fields_pattern(&link.variant);
+							let args = args(&link.variant);
+							quote! {
+								#error_kind_name::#variant_name #pattern => #custom_display(f, #args),
+							}
+						},
+
+						None => {
+							let pattern = fields_pattern_ignore(&link.variant);
+							quote! {
+								#error_kind_name::#variant_name #pattern => write!(f, "{}", self.description()),
+							}
+						},
 					}
 				},
 			});
@@ -385,6 +436,32 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				/// Result type.
 				pub type #result_name<T> = ::std::result::Result<T, #error_name>;
 
+				/// ChainErr trait.
+				pub trait #chain_err_name<T> {
+					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, #error_name> where F: FnOnce() -> EK, EK: Into<#error_kind_name>;
+				}
+
+				impl <T, E> #chain_err_name<T> for ::std::result::Result<T, E> where E: ::std::error::Error + Send + 'static {
+					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, Error> where F: FnOnce() -> EK, EK: Into<#error_kind_name> {
+						self.map_err(move |err| {
+							let err = Box::new(err) as Box<::std::error::Error+ Send + 'static>;
+
+							let (err, backtrace) = match err.downcast::<#error_name>() {
+								Ok(err) => {
+									let backtrace = Some((err.1).1.clone());
+									(err as Box<::std::error::Error + Send + 'static>, backtrace)
+								},
+
+								Err(err) => (err, None),
+							};
+
+							let backtrace = backtrace.unwrap_or_else(#make_backtrace_name);
+
+							#error_name(callback().into(), (Some(err), backtrace))
+						})
+					}
+				}
+
 				#[allow(non_snake_case)]
 				fn #make_backtrace_name() -> Option<::std::sync::Arc<::backtrace::Backtrace>> {
 					match ::std::env::var_os("RUST_BACKTRACE") {
@@ -418,18 +495,54 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	result.to_string().parse().unwrap()
 }
 
-fn pattern(variant: &syn::Variant) -> quote::Tokens {
+fn fields_pattern(variant: &syn::Variant) -> quote::Tokens {
+	match variant.data {
+		syn::VariantData::Struct(ref fields) => {
+			let fields = fields.iter().map(|f| {
+				let field_name = &f.ident;
+				quote!(ref #field_name)
+			});
+			quote!({ #(#fields),* })
+		},
+
+		syn::VariantData::Tuple(ref fields) => {
+			let fields = fields.iter().enumerate().map(|(i, _)| {
+				let field_name = syn::Ident::from(format!("value{}", i));
+				quote!(ref #field_name)
+			});
+			quote!((#(#fields),*))
+		},
+
+		syn::VariantData::Unit => quote!(),
+	}
+}
+
+fn fields_pattern_ignore(variant: &syn::Variant) -> quote::Tokens {
 	match variant.data {
 		syn::VariantData::Struct(_) => quote!({ .. }),
-
 		syn::VariantData::Tuple(_) => quote!((..)),
+		syn::VariantData::Unit => quote!(),
+	}
+}
 
-/*
-		syn::VariantData::Tuple(ref fields) => {
-			let fields = fields.iter().map(|_| quote!(_));
-			quote!((#(#fields,)*))
+fn args(variant: &syn::Variant) -> quote::Tokens {
+	match variant.data {
+		syn::VariantData::Struct(ref fields) => {
+			let fields = fields.iter().map(|f| {
+				let field_name = &f.ident;
+				quote!(#field_name)
+			});
+			quote!((#(#fields),*))
 		},
-*/
+
+		syn::VariantData::Tuple(ref fields) => {
+			let fields = fields.iter().enumerate().map(|(i, _)| {
+				let field_name = syn::Ident::from(format!("value{}", i));
+				quote!(#field_name)
+			});
+			quote!((#(#fields),*))
+		},
+
 		syn::VariantData::Unit => quote!(),
 	}
 }
