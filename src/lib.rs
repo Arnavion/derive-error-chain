@@ -180,6 +180,30 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				},
 			});
 
+			let error_kind_display_cases = links.iter().map(|link| match link.link_type {
+				LinkType::Chainable => {
+					let variant_name = &link.variant.ident;
+					quote! {
+						#error_kind_name::#variant_name(ref err) => write!(f, "{}", err),
+					}
+				},
+
+				LinkType::Foreign => {
+					let variant_name = &link.variant.ident;
+					quote! {
+						#error_kind_name::#variant_name(ref err) => write!(f, "{}", err),
+					}
+				},
+
+				LinkType::Custom => {
+					let variant_name = &link.variant.ident;
+					let fields_match = pattern(&link.variant);
+					quote! {
+						#error_kind_name::#variant_name #fields_match => write!(f, "{}", self.description()),
+					}
+				},
+			});
+
 			let error_kind_from_impls = links.iter().map(|link| match link.link_type {
 				LinkType::Chainable => {
 					let variant_name = &link.variant.ident;
@@ -279,7 +303,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 				impl ::std::fmt::Display for #error_kind_name {
 					fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-						write!(f, "{}", self.description())
+						match *self {
+							#error_kind_name::Msg(ref s) => write!(f, "{}", s),
+
+							#(#error_kind_display_cases)*
+						}
 					}
 				}
 
