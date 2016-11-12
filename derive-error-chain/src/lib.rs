@@ -56,10 +56,11 @@
 //! }
 //! ```
 //!
-//! Other differences from error-chain are:
+//! Notes:
 //!
-//! - This macro's output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
-//! - This macro uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
+//! - This library requires the nightly compiler to be able to use the `proc_macro` and `conservative_impl_trait` rust features.
+//! - The macro output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
+//! - The macro output uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
 
 extern crate proc_macro;
 #[macro_use]

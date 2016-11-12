@@ -1,7 +1,16 @@
 [package]
 name = "derive-error-chain"
 version = "0.1.0"
-authors = ["Arnavion <arnavion@gmail.com>"]
+license = "MIT OR Apache-2.0"
+authors = [
+	"Brian Anderson <banderson@mozilla.com>",
+	"Paul Colomiets <paul@colomiets.name>",
+	"Colin Kiegel <kiegel@gmx.de>",
+	"Arnav Singh <arnavion@gmail.com>"
+]
+description = "A Macros 1.1 implementation of error-chain"
+documentation = "https://docs.rs/derive-error-chain"
+repository = "https://github.com/Arnavion/derive-error-chain"
 
 [dependencies]
 quote = "0.3.x"
