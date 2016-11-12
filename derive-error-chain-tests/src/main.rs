@@ -16,6 +16,8 @@ fn main() {
 	has_backtrace_depending_on_env();
 	chain_err();
 
+	public_api_test();
+
 	foreign_link_test::display_underlying_error();
 	foreign_link_test::finds_cause();
 	foreign_link_test::iterates();
@@ -112,6 +114,23 @@ fn chain_err() {
 		format!("{:?}", None as Option<&::std::error::Error>),
 		format!("{:?}", error_iter.next())
 	);
+}
+
+mod test {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		#[error_chain(custom)]
+		HttpStatus(u32),
+	}
+}
+
+fn public_api_test() {
+	use test::{ Error, ErrorKind, ChainErr, Result };
+
+	let err: Error = ErrorKind::HttpStatus(5).into();
+	let result: Result<()> = Err(err);
+
+	result.chain_err(|| "An HTTP error occurred").err().unwrap();
 }
 
 mod foreign_link_test {
