@@ -14,7 +14,8 @@ fn main() {
 	smoke_test_8();
 
 	has_backtrace_depending_on_env();
-	
+	chain_err();
+
 	foreign_link_test::display_underlying_error();
 	foreign_link_test::finds_cause();
 	foreign_link_test::iterates();
@@ -22,7 +23,7 @@ fn main() {
 
 fn smoke_test_1() {
 	#[derive(Debug, error_chain)]
-	#[error_chain(error = "Error", result = "Result")]
+	#[error_chain(error = "Error", result = "Result", chain_err = "ChainErr")]
 	enum ErrorKind {
 	}
 }
@@ -87,6 +88,32 @@ fn has_backtrace_depending_on_env() {
 	assert!(err.backtrace().is_some());
 }
 
+fn chain_err() {
+	#[derive(Debug, error_chain)]
+	enum ErrorKind {
+		#[error_chain(custom)]
+		HttpStatus(u32),
+	}
+
+	let err: Error = ErrorKind::HttpStatus(5).into();
+	let result: Result<()> = Err(err);
+	let result = result.chain_err(|| "An HTTP error occurred");
+	let chained_error = result.err().unwrap();
+	let mut error_iter = chained_error.iter();
+	assert_eq!(
+		"An HTTP error occurred".to_string(),
+		format!("{}", error_iter.next().unwrap())
+	);
+	assert_eq!(
+		format!("{}", ErrorKind::HttpStatus(5)),
+		format!("{}", error_iter.next().unwrap())
+	);
+	assert_eq!(
+		format!("{:?}", None as Option<&::std::error::Error>),
+		format!("{:?}", error_iter.next())
+	);
+}
+
 mod foreign_link_test {
 	use std::fmt;
 
@@ -135,7 +162,7 @@ mod foreign_link_test {
 	pub fn display_underlying_error() {
 		let chained_error = try_foreign_error().err().unwrap();
 		assert_eq!(
-			format!("{}", ForeignError{ cause: ForeignErrorCause { } }),
+			format!("{}", ForeignError { cause: ForeignErrorCause { } }),
 			format!("{}", chained_error)
 		);
 	}
@@ -143,7 +170,7 @@ mod foreign_link_test {
 	pub fn finds_cause() {
 		let chained_error = try_foreign_error().err().unwrap();
 		assert_eq!(
-			format!("{}", ForeignErrorCause{}),
+			format!("{}", ForeignErrorCause { }),
 			format!("{}", ::std::error::Error::cause(&chained_error).unwrap())
 		);
 	}

@@ -32,7 +32,8 @@
 //!
 //! ```ignore
 //! #[derive(Debug, error_chain)]
-//! #[error_chain(error = "Error", result = "Result")] // This attribute is optional if using the default names "Error" and "Result"
+//! // This attribute is optional if using the default names "Error", "Result" and "ChainErr"
+//! #[error_chain(error = "Error", result = "Result", chain_err = "ChainErr")]
 //! pub enum ErrorKind {
 //!     Dist(rustup_dist::Error, rustup_dist::ErrorKind),
 //!
@@ -76,6 +77,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut error_kind_attrs = vec![];
 	let mut error_name = syn::Ident::from("Error");
 	let mut result_name = syn::Ident::from("Result");
+	let mut chain_err_name = syn::Ident::from("ChainErr");
 
 	for attr in ast.attrs {
 		let mut suppress_attr = false;
@@ -93,6 +95,9 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						else if ident == "result" {
 							result_name = syn::Ident::from(value.clone());
 						}
+						else if ident == "chain_err" {
+							chain_err_name = syn::Ident::from(value.clone());
+						}
 					}
 				}
 			},
@@ -107,7 +112,6 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 	let error_chain_iter_name = syn::Ident::from(error_name.to_string() + "ChainIter");
 	let make_backtrace_name = syn::Ident::from(error_name.to_string() + "_make_backtrace");
-	let chain_err_name = syn::Ident::from(error_name.to_string() + "ChainErr");
 
 	struct Link {
 		variant: syn::Variant,
