@@ -1,5 +1,5 @@
 #![crate_type = "proc-macro"]
-#![feature(proc_macro, proc_macro_lib, slice_patterns)]
+#![feature(proc_macro, proc_macro_lib)]
 #![recursion_limit = "300"]
 
 //! A Macros 1.1 implementation of https://crates.io/crates/error-chain
