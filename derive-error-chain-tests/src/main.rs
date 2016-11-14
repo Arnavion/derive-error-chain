@@ -14,6 +14,8 @@ fn main() {
 	smoke_test_8();
 
 	has_backtrace_depending_on_env();
+	can_disable_backtrace();
+	can_override_backtrace();
 	chain_err();
 
 	public_api_test();
@@ -96,6 +98,42 @@ fn has_backtrace_depending_on_env() {
 	env::set_var("RUST_BACKTRACE", "yes");
 	let err = Error::from(ErrorKind::MyError);
 	assert!(err.backtrace().is_some());
+}
+
+fn can_disable_backtrace() {
+	#[derive(Debug, error_chain)]
+	#[error_chain(backtrace = "")]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+
+	let err: Error = ErrorKind::Msg("foo".to_string()).into();
+	assert!(err.backtrace().is_none());
+	assert_eq!(
+		r#"Error(Msg("foo"), (None, None))"#,
+		format!("{:?}", err)
+	);
+}
+
+fn can_override_backtrace() {
+	#[derive(Debug)]
+	pub struct MyBacktrace;
+	impl MyBacktrace {
+		fn new() -> MyBacktrace { MyBacktrace }
+	}
+
+	#[derive(Debug, error_chain)]
+	#[error_chain(backtrace = "MyBacktrace")]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+
+	let err: Error = ErrorKind::Msg("foo".to_string()).into();
+	let _: &MyBacktrace = err.backtrace().unwrap();
+	assert_eq!(
+		r#"Error(Msg("foo"), (None, Some(MyBacktrace)))"#,
+		format!("{:?}", err)
+	);
 }
 
 fn chain_err() {

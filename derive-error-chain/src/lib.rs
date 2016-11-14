@@ -65,6 +65,7 @@
 //! - This library requires the nightly compiler to be able to use the `proc_macro` and `conservative_impl_trait` rust features.
 //! - The macro output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
 //! - The macro output uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
+//! - The backtrace type can be overridden from `::backtrace::Backtrace` by setting `backtrace = "SomeOtherPath"`. It can be disabled completely by setting it to an empty string.
 //! - The enum must always have a special `Msg(String)` member. Unlike error_chain which adds this member implicitly, this macro requires it explicitly.
 
 extern crate proc_macro;
@@ -81,6 +82,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut error_name = syn::Ident::from("Error");
 	let mut result_name = syn::Ident::from("Result");
 	let mut chain_err_name = syn::Ident::from("ChainErr");
+	let mut backtrace_name = Some(syn::Path::from("::backtrace::Backtrace"));
+	let mut support_backtrace = true;
 
 	for attr in ast.attrs {
 		match &attr.value {
@@ -96,6 +99,15 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						else if ident == "chain_err" {
 							chain_err_name = syn::Ident::from(value.clone());
 						}
+						else if ident == "backtrace" {
+							if value == "" {
+								support_backtrace = false;
+								backtrace_name = None;
+							}
+							else {
+								backtrace_name = Some(syn::Path::from(value.clone()))
+							}
+						}
 					}
 				}
 			},
@@ -106,6 +118,17 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 	let error_chain_iter_name = syn::Ident::from(error_name.to_string() + "ChainIter");
 	let make_backtrace_name = syn::Ident::from(error_name.to_string() + "_make_backtrace");
+
+	let fake_backtrace = if support_backtrace {
+		None
+	}
+	else {
+		backtrace_name = Some(syn::Path::from(error_name.to_string() + "Backtrace"));
+		Some(quote! {
+			#[derive(Debug)]
+			pub enum #backtrace_name { }
+		})
+	};
 
 	struct Link {
 		variant: syn::Variant,
@@ -318,6 +341,26 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				LinkType::Custom => None,
 			});
 
+			let make_backtrace_fn = if support_backtrace {
+				quote! {
+					#[allow(non_snake_case)]
+					fn #make_backtrace_name() -> Option<::std::sync::Arc<#backtrace_name>> {
+						match ::std::env::var_os("RUST_BACKTRACE") {
+							Some(ref val) if val != "0" => Some(::std::sync::Arc::new(#backtrace_name::new())),
+							_ => None
+						}
+					}
+				}
+			}
+			else {
+				quote! {
+					#[allow(non_snake_case)]
+					fn #make_backtrace_name() -> Option<::std::sync::Arc<#backtrace_name>> {
+						None
+					}
+				}
+			};
+
 			quote! {
 				impl #error_kind_name {
 					/// Returns the description of this error kind.
@@ -355,7 +398,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					pub #error_kind_name,
 					pub (
 						Option<Box<::std::error::Error + Send>>,
-						Option<::std::sync::Arc<::backtrace::Backtrace>>));
+						Option<::std::sync::Arc<#backtrace_name>>));
 
 				#[allow(unused)]
 				impl #error_name {
@@ -371,7 +414,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					}
 
 					/// Gets the backtrace of this error.
-					pub fn backtrace(&self) -> Option<&::backtrace::Backtrace> {
+					pub fn backtrace(&self) -> Option<&#backtrace_name> {
 						(self.1).1.as_ref().map(|v| &**v)
 					}
 				}
@@ -440,13 +483,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					}
 				}
 
-				#[allow(non_snake_case)]
-				fn #make_backtrace_name() -> Option<::std::sync::Arc<::backtrace::Backtrace>> {
-					match ::std::env::var_os("RUST_BACKTRACE") {
-						Some(ref val) if val != "0" => Some(::std::sync::Arc::new(::backtrace::Backtrace::new())),
-						_ => None
-					}
-				}
+				#make_backtrace_fn
 
 				struct #error_chain_iter_name<'a>(pub Option<&'a ::std::error::Error>);
 
@@ -464,6 +501,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						}
 					}
 				}
+
+				#fake_backtrace
 			}
 		},
 
