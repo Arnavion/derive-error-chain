@@ -12,7 +12,7 @@
 //!
 //!     links {
 //!     	rustup_dist::Error, rustup_dist::ErrorKind, Dist;
-//!     	rustup_utils::Error, rustup_utils::ErrorKind, Utils;
+//!     	rustup_utils::Error, rustup_utils::ErrorKind, Utils, #[cfg(unix)];
 //!     }
 //!
 //!     foreign_links {
@@ -39,6 +39,7 @@
 //!
 //!     Dist(rustup_dist::Error, rustup_dist::ErrorKind),
 //!
+//!     #[cfg(unix)]
 //!     Utils(rustup_utils::Error, rustup_utils::ErrorKind),
 //!
 //!     #[error_chain(foreign)]

@@ -232,3 +232,35 @@ mod foreign_link_test {
 		Ok(())
 	}
 }
+
+mod attributes_test {
+	#[allow(unused_imports)]
+	use std::io;
+
+	mod inner {
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind {
+			Msg(String),
+
+			#[cfg(foo)]
+			Inner(inner::Error, inner::ErrorKind),
+		}
+	}
+
+	#[derive(Debug, error_chain)]
+	#[error_chain(error = "Error", chain_err = "ErrorChain", result = "Result")]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[cfg(foo)]
+		Inner(inner::Error, inner::ErrorKind),
+
+		#[cfg(foo)]
+		#[error_chain(foreign)]
+		Io(io::Error),
+
+		#[cfg(foo)]
+		#[error_chain(custom)]
+		AnError,
+	}
+}
