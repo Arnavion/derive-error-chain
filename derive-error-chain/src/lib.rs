@@ -83,12 +83,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		let mut suppress_attr = false;
 
 		match &attr.value {
-			&syn::MetaItem::List(ref ident, ref nested_meta_items) if ident.to_string() == "error_chain" => {
+			&syn::MetaItem::List(ref ident, ref nested_meta_items) if ident == "error_chain" => {
 				suppress_attr = true;
 
 				for nested_meta_item in nested_meta_items {
 					if let syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) = *nested_meta_item {
-						let ident = ident.to_string();
 						if ident == "error" {
 							error_name = syn::Ident::from(value.clone());
 						}
@@ -140,14 +139,12 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					let mut suppress_attr = false;
 
 					if let syn::MetaItem::List(ref ident, ref nested_meta_items) = attr.value {
-						if ident.to_string() == "error_chain" {
+						if ident == "error_chain" {
 							suppress_attr = true;
 
 							for nested_meta_item in nested_meta_items {
 								match *nested_meta_item {
 									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) => {
-										let ident = ident.to_string();
-
 										if ident == "foreign" {
 											link_type = LinkType::Foreign;
 										}
@@ -157,8 +154,6 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 									},
 
 									syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
-										let ident = ident.to_string();
-
 										if ident == "description" {
 											custom_description = Some(syn::Path::from(value.clone()));
 										}
