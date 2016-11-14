@@ -35,6 +35,8 @@
 //! // This attribute is optional if using the default names "Error", "Result" and "ChainErr"
 //! #[error_chain(error = "Error", result = "Result", chain_err = "ChainErr")]
 //! pub enum ErrorKind {
+//!     Msg(String), // A special variant that must always be present.
+//!
 //!     Dist(rustup_dist::Error, rustup_dist::ErrorKind),
 //!
 //!     Utils(rustup_utils::Error, rustup_utils::ErrorKind),
@@ -62,30 +64,26 @@
 //! - This library requires the nightly compiler to be able to use the `proc_macro` and `conservative_impl_trait` rust features.
 //! - The macro output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
 //! - The macro output uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
+//! - The enum must always have a special `Msg(String)` member. Unlike error_chain which adds this member implicitly, this macro requires it explicitly.
 
 extern crate proc_macro;
 #[macro_use]
 extern crate quote;
 extern crate syn;
 
-#[proc_macro_derive(error_chain)]
+#[proc_macro_derive(error_chain, attributes(error_chain))]
 pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let source = input.to_string();
 	let ast = syn::parse_macro_input(&source).unwrap();
 	let error_kind_name = ast.ident;
 
-	let mut error_kind_attrs = vec![];
 	let mut error_name = syn::Ident::from("Error");
 	let mut result_name = syn::Ident::from("Result");
 	let mut chain_err_name = syn::Ident::from("ChainErr");
 
 	for attr in ast.attrs {
-		let mut suppress_attr = false;
-
 		match &attr.value {
 			&syn::MetaItem::List(ref ident, ref nested_meta_items) if ident == "error_chain" => {
-				suppress_attr = true;
-
 				for nested_meta_item in nested_meta_items {
 					if let syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) = *nested_meta_item {
 						if ident == "error" {
@@ -102,10 +100,6 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 			},
 
 			_ => { },
-		}
-
-		if !suppress_attr {
-			error_kind_attrs.push(attr);
 		}
 	}
 
@@ -130,18 +124,17 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 			let mut links = vec![];
 
 			for variant in variants {
-				let mut attrs = vec![];
+				if &variant.ident == "Msg" {
+					continue;
+				}
+
 				let mut link_type = LinkType::Chainable;
 				let mut custom_description = None;
 				let mut custom_display = None;
 
-				for attr in variant.attrs {
-					let mut suppress_attr = false;
-
+				for attr in &variant.attrs {
 					if let syn::MetaItem::List(ref ident, ref nested_meta_items) = attr.value {
 						if ident == "error_chain" {
-							suppress_attr = true;
-
 							for nested_meta_item in nested_meta_items {
 								match *nested_meta_item {
 									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) => {
@@ -167,13 +160,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 							}
 						}
 					}
-
-					if !suppress_attr {
-						attrs.push(attr);
-					}
 				}
-
-				let variant = syn::Variant { attrs: attrs, .. variant };
 
 				links.push(Link {
 					variant: variant,
@@ -182,8 +169,6 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					custom_display: custom_display,
 				});
 			}
-
-			let variants = links.iter().map(|link| &link.variant);
 
 			let error_kind_description_cases = links.iter().map(|link| match link.link_type {
 				LinkType::Chainable | LinkType::Foreign => {
@@ -333,14 +318,6 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 			});
 
 			quote! {
-				#(#error_kind_attrs)*
-				pub enum #error_kind_name {
-					/// A generic error
-					Msg(String),
-
-					#(#variants,)*
-				}
-
 				impl #error_kind_name {
 					/// Returns the description of this error kind.
 					pub fn description(&self) -> &str {

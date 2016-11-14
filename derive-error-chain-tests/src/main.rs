@@ -26,19 +26,23 @@ fn main() {
 fn smoke_test_1() {
 	#[derive(Debug, error_chain)]
 	#[error_chain(error = "Error", result = "Result", chain_err = "ChainErr")]
-	enum ErrorKind {
+	pub enum ErrorKind {
+		Msg(String),
 	}
 }
 
 fn smoke_test_2() {
 	#[derive(Debug, error_chain)]
-	enum ErrorKind {
+	pub enum ErrorKind {
+		Msg(String),
 	}
 }
 
 fn smoke_test_4() {
 	#[derive(Debug, error_chain)]
-	enum ErrorKind {
+	pub enum ErrorKind {
+		Msg(String),
+
 		#[error_chain(custom, description = "http_status_description", display = "http_status_display")]
 		HttpStatus(u32),
 	}
@@ -58,7 +62,9 @@ fn smoke_test_4() {
 
 fn smoke_test_8() {
 	#[derive(Debug, error_chain)]
-	enum ErrorKind {
+	pub enum ErrorKind {
+		Msg(String),
+
 		#[error_chain(custom)]
 		FileNotFound,
 
@@ -71,7 +77,9 @@ fn has_backtrace_depending_on_env() {
 	use std::env;
 
 	#[derive(Debug, error_chain)]
-	enum ErrorKind {
+	pub enum ErrorKind {
+		Msg(String),
+
 		#[error_chain(custom)]
 		MyError,
 	}
@@ -92,7 +100,9 @@ fn has_backtrace_depending_on_env() {
 
 fn chain_err() {
 	#[derive(Debug, error_chain)]
-	enum ErrorKind {
+	pub enum ErrorKind {
+		Msg(String),
+
 		#[error_chain(custom)]
 		HttpStatus(u32),
 	}
@@ -119,6 +129,8 @@ fn chain_err() {
 mod test {
 	#[derive(Debug, error_chain)]
 	pub enum ErrorKind {
+		Msg(String),
+
 		#[error_chain(custom)]
 		HttpStatus(u32),
 	}
@@ -174,6 +186,8 @@ mod foreign_link_test {
 
 	#[derive(Debug, error_chain)]
 	pub enum ErrorKind {
+		Msg(String),
+
 		#[error_chain(foreign)]
 		Foreign(ForeignError),
 	}
