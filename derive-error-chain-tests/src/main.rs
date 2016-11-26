@@ -14,16 +14,18 @@ fn main() {
 	smoke_test_8();
 
 	has_backtrace_depending_on_env();
-	can_disable_backtrace();
-	can_override_backtrace();
 	chain_err();
-
-	public_api_test();
 
 	foreign_link_test::display_underlying_error();
 	foreign_link_test::finds_cause();
 	foreign_link_test::iterates();
+
+	can_disable_backtrace();
+	can_override_backtrace();
+	public_api_test();
 }
+
+// Upstream tests
 
 fn smoke_test_1() {
 	#[derive(Debug, error_chain)]
@@ -100,42 +102,6 @@ fn has_backtrace_depending_on_env() {
 	assert!(err.backtrace().is_some());
 }
 
-fn can_disable_backtrace() {
-	#[derive(Debug, error_chain)]
-	#[error_chain(backtrace = "")]
-	pub enum ErrorKind {
-		Msg(String),
-	}
-
-	let err: Error = ErrorKind::Msg("foo".to_string()).into();
-	assert!(err.backtrace().is_none());
-	assert_eq!(
-		r#"Error(Msg("foo"), (None, None))"#,
-		format!("{:?}", err)
-	);
-}
-
-fn can_override_backtrace() {
-	#[derive(Debug)]
-	pub struct MyBacktrace;
-	impl MyBacktrace {
-		fn new() -> MyBacktrace { MyBacktrace }
-	}
-
-	#[derive(Debug, error_chain)]
-	#[error_chain(backtrace = "MyBacktrace")]
-	pub enum ErrorKind {
-		Msg(String),
-	}
-
-	let err: Error = ErrorKind::Msg("foo".to_string()).into();
-	let _: &MyBacktrace = err.backtrace().unwrap();
-	assert_eq!(
-		r#"Error(Msg("foo"), (None, Some(MyBacktrace)))"#,
-		format!("{:?}", err)
-	);
-}
-
 fn chain_err() {
 	#[derive(Debug, error_chain)]
 	pub enum ErrorKind {
@@ -162,25 +128,6 @@ fn chain_err() {
 		format!("{:?}", None as Option<&::std::error::Error>),
 		format!("{:?}", error_iter.next())
 	);
-}
-
-mod test {
-	#[derive(Debug, error_chain)]
-	pub enum ErrorKind {
-		Msg(String),
-
-		#[error_chain(custom)]
-		HttpStatus(u32),
-	}
-}
-
-fn public_api_test() {
-	use test::{ Error, ErrorKind, ChainErr, Result };
-
-	let err: Error = ErrorKind::HttpStatus(5).into();
-	let result: Result<()> = Err(err);
-
-	result.chain_err(|| "An HTTP error occurred").err().unwrap();
 }
 
 mod foreign_link_test {
@@ -301,4 +248,61 @@ mod attributes_test {
 		#[error_chain(custom)]
 		AnError,
 	}
+}
+
+// Own tests
+
+fn can_disable_backtrace() {
+	#[derive(Debug, error_chain)]
+	#[error_chain(backtrace = "")]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+
+	let err: Error = ErrorKind::Msg("foo".to_string()).into();
+	assert!(err.backtrace().is_none());
+	assert_eq!(
+		r#"Error(Msg("foo"), (None, None))"#,
+		format!("{:?}", err)
+	);
+}
+
+fn can_override_backtrace() {
+	#[derive(Debug)]
+	pub struct MyBacktrace;
+	impl MyBacktrace {
+		fn new() -> MyBacktrace { MyBacktrace }
+	}
+
+	#[derive(Debug, error_chain)]
+	#[error_chain(backtrace = "MyBacktrace")]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+
+	let err: Error = ErrorKind::Msg("foo".to_string()).into();
+	let _: &MyBacktrace = err.backtrace().unwrap();
+	assert_eq!(
+		r#"Error(Msg("foo"), (None, Some(MyBacktrace)))"#,
+		format!("{:?}", err)
+	);
+}
+
+mod test {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(custom)]
+		HttpStatus(u32),
+	}
+}
+
+fn public_api_test() {
+	use test::{ Error, ErrorKind, ChainErr, Result };
+
+	let err: Error = ErrorKind::HttpStatus(5).into();
+	let result: Result<()> = Err(err);
+
+	result.chain_err(|| "An HTTP error occurred").err().unwrap();
 }
