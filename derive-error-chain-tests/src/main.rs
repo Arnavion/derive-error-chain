@@ -23,6 +23,7 @@ fn main() {
 	can_disable_backtrace();
 	can_override_backtrace();
 	public_api_test();
+	inlined_description_and_display();
 }
 
 // Upstream tests
@@ -305,4 +306,20 @@ fn public_api_test() {
 	let result: Result<()> = Err(err);
 
 	result.chain_err(|| "An HTTP error occurred").err().unwrap();
+}
+
+fn inlined_description_and_display() {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(custom)]
+		#[error_chain(description = r#"(|_| "http request returned an unsuccessful status code")"#)]
+		#[error_chain(display = r#"(|f: &mut ::std::fmt::Formatter, e| write!(f, "http request returned an unsuccessful status code: {}", e))"#)]
+		HttpStatus(u32),
+	}
+
+	let err: Error = ErrorKind::HttpStatus(5).into();
+	assert_eq!("http request returned an unsuccessful status code", ::std::error::Error::description(&err));
+	assert_eq!("http request returned an unsuccessful status code: 5".to_string(), format!("{}", err));
 }

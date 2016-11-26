@@ -67,6 +67,14 @@
 //! - The macro output uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
 //! - The backtrace type can be overridden from `::backtrace::Backtrace` by setting `backtrace = "SomeOtherPath"`. It can be disabled completely by setting it to an empty string.
 //! - The enum must always have a special `Msg(String)` member. Unlike error_chain which adds this member implicitly, this macro requires it explicitly.
+//! - The description and display functions can be inlined like this:
+//!
+//!    ```ignore
+//!     #[error_chain(custom)]
+//!     #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
+//!     #[error_chain(display = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
+//!     InvalidToolchainName(String),
+//!    ```
 
 extern crate proc_macro;
 #[macro_use]
