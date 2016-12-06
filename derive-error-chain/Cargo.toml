@@ -1,11 +1,12 @@
 [package]
 name = "derive-error-chain"
-version = "0.1.2"
-license = "MIT OR Apache-2.0"
+version = "0.7.0"
+license = "MIT/Apache-2.0"
 authors = [
 	"Brian Anderson <banderson@mozilla.com>",
 	"Paul Colomiets <paul@colomiets.name>",
 	"Colin Kiegel <kiegel@gmx.de>",
+	"Yamakaky <yamakaky@yamaworld.fr>",
 	"Arnav Singh <arnavion@gmail.com>"
 ]
 description = "A Macros 1.1 implementation of error-chain"

@@ -7,16 +7,20 @@
 //! The error-chain example
 //!
 //! ```ignore
+//! mod other_error {
+//!     error_chain! {}
+//! }
+//!
 //! error_chain {
-//!     types { Error, ErrorKind, ChainErr, Result; }
+//!     types { Error, ErrorKind, ResultExt, Result; }
 //!
 //!     links {
-//!     	rustup_dist::Error, rustup_dist::ErrorKind, Dist;
-//!     	rustup_utils::Error, rustup_utils::ErrorKind, Utils, #[cfg(unix)];
+//!         Another(other_error::Error, other_error::ErrorKind) #[cfg(unix)];
 //!     }
 //!
 //!     foreign_links {
-//!     	temp::Error, Temp;
+//!         Fmt(::std::fmt::Error);
+//!         Io(::std::io::Error) #[cfg(unix)];
 //!     }
 //!
 //!     errors {
@@ -31,19 +35,29 @@
 //! becomes
 //!
 //! ```ignore
+//! mod other_error {
+//!     #[derive(Debug, error_chain)]
+//!     pub enum ErrorKind {
+//!         Msg(String), // A special variant that must always be present.
+//!     }
+//! }
+//!
 //! #[derive(Debug, error_chain)]
-//! // This attribute is optional if using the default names "Error", "Result" and "ChainErr"
-//! #[error_chain(error = "Error", result = "Result", chain_err = "ChainErr")]
+//! // This attribute is optional if using the default names "Error", "ResultExt" and "Result".
+//! #[error_chain(error = "Error", result_ext = "ResultExt", result = "Result")]
 //! pub enum ErrorKind {
 //!     Msg(String), // A special variant that must always be present.
 //!
-//!     Dist(rustup_dist::Error, rustup_dist::ErrorKind),
-//!
 //!     #[cfg(unix)]
-//!     Utils(rustup_utils::Error, rustup_utils::ErrorKind),
+//!     #[error_chain(link = "other_error::Error")]
+//!     Another(other_error::ErrorKind),
 //!
 //!     #[error_chain(foreign)]
-//!     Temp(temp::Error),
+//!     Fmt(::std::fmt::Error),
+//!
+//!     #[cfg(unix)]
+//!     #[error_chain(foreign)]
+//!     Io(::std::io::Error),
 //!
 //!     #[error_chain(custom, description = "invalid_toolchain_name_description", display = "invalid_toolchain_name_display")]
 //!     InvalidToolchainName(String),
@@ -62,11 +76,11 @@
 //!
 //! Notes:
 //!
-//! - This library requires the nightly compiler to be able to use the `proc_macro` and `conservative_impl_trait` rust features.
+//! - This library requires the nightly compiler to be able to use the `proc_macro` rust feature.
 //! - The macro output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
-//! - The macro output uses `::backtrace::Backtrace` unlike error-chain which uses `$crate::Backtrace`. Thus you need to link to `backtrace` in your own crate.
-//! - The backtrace type can be overridden from `::backtrace::Backtrace` by setting `backtrace = "SomeOtherPath"`. It can be disabled completely by setting it to an empty string.
-//! - The enum must always have a special `Msg(String)` member. Unlike error_chain which adds this member implicitly, this macro requires it explicitly.
+//! - The result wrapper can be disabled by setting `result = ""` in the `#[error_chain]` attribute on the ErrorKind.
+//! - The backtrace functionality can be disabled by setting `backtrace = "false"` or `backtrace = false` in the `#[error_chain]` attribute on the ErrorKind.
+//! - The ErrorKind must have a special `Msg(String)` member. Unlike error_chain which adds this member implicitly, this macro requires it explicitly.
 //! - The description and display functions can be inlined like this:
 //!
 //!    ```ignore
@@ -88,34 +102,34 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let error_kind_name = ast.ident;
 
 	let mut error_name = syn::Ident::from("Error");
+	let mut result_ext_name = syn::Ident::from("ResultExt");
 	let mut result_name = syn::Ident::from("Result");
-	let mut chain_err_name = syn::Ident::from("ChainErr");
-	let mut backtrace_name = Some(syn::Path::from("::backtrace::Backtrace"));
 	let mut support_backtrace = true;
 
 	for attr in ast.attrs {
 		match &attr.value {
 			&syn::MetaItem::List(ref ident, ref nested_meta_items) if ident == "error_chain" => {
 				for nested_meta_item in nested_meta_items {
-					if let syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) = *nested_meta_item {
-						if ident == "error" {
-							error_name = syn::Ident::from(value.clone());
-						}
-						else if ident == "result" {
-							result_name = syn::Ident::from(value.clone());
-						}
-						else if ident == "chain_err" {
-							chain_err_name = syn::Ident::from(value.clone());
-						}
-						else if ident == "backtrace" {
-							if value == "" {
+					match *nested_meta_item {
+						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
+							if ident == "error" {
+								error_name = syn::Ident::from(value.clone());
+							}
+							else if ident == "result_ext" {
+								result_ext_name = syn::Ident::from(value.clone());
+							}
+							else if ident == "result" {
+								result_name = syn::Ident::from(value.clone());
+							}
+							else if ident == "backtrace" && value == "false" {
 								support_backtrace = false;
-								backtrace_name = None;
 							}
-							else {
-								backtrace_name = Some(syn::Path::from(value.clone()))
-							}
-						}
+						},
+
+						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Bool(false))) if ident == "backtrace" =>
+							support_backtrace = false,
+
+						_ => { },
 					}
 				}
 			},
@@ -124,19 +138,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		}
 	}
 
-	let error_chain_iter_name = syn::Ident::from(error_name.to_string() + "ChainIter");
-	let make_backtrace_name = syn::Ident::from(error_name.to_string() + "_make_backtrace");
-
-	let fake_backtrace = if support_backtrace {
-		None
-	}
-	else {
-		backtrace_name = Some(syn::Path::from(error_name.to_string() + "Backtrace"));
-		Some(quote! {
-			#[derive(Debug)]
-			pub enum #backtrace_name { }
-		})
-	};
+	let error_chain_name = syn::Ident::from(error_name.to_string() + "_error_chain");
 
 	struct Link {
 		variant: syn::Variant,
@@ -146,8 +148,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	}
 
 	enum LinkType {
-		Chainable,
-		Foreign,
+		Chainable(syn::Ty, syn::Ty),
+		Foreign(syn::Ty),
 		Custom,
 	}
 
@@ -160,7 +162,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					continue;
 				}
 
-				let mut link_type = LinkType::Chainable;
+				let mut link_type = None;
 				let mut custom_description = None;
 				let mut custom_display = None;
 
@@ -171,15 +173,33 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 								match *nested_meta_item {
 									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) => {
 										if ident == "foreign" {
-											link_type = LinkType::Foreign;
+											match &variant.data {
+												&syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
+													link_type = Some(LinkType::Foreign(fields[0].ty.clone())),
+
+												_ => panic!("Foreign link {} must be a tuple of one element (the foreign error type).", variant.ident),
+											}
 										}
 										else if ident == "custom" {
-											link_type = LinkType::Custom;
+											link_type = Some(LinkType::Custom);
 										}
 									},
 
 									syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
-										if ident == "description" {
+										if ident == "link" {
+											match &variant.data {
+												&syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
+													link_type = Some(LinkType::Chainable(
+														syn::parse_type(value).unwrap_or_else(|err| {
+															let variant_name = &variant.ident;
+															panic!("Could not parse link attribute of member {} as a type - {}", variant_name, err)
+														}),
+														fields[0].ty.clone())),
+
+												_ => panic!("Foreign link {} must be a tuple of one element (the foreign error type).", variant.ident),
+											}
+										}
+										else if ident == "description" {
 											custom_description = Some(syn::Path::from(value.clone()));
 										}
 										else if ident == "display" {
@@ -194,6 +214,12 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					}
 				}
 
+				let link_type =
+					link_type.unwrap_or_else(|| {
+						let variant_name = &variant.ident;
+						panic!(r#"Member {} does not have any of #[error_chain(link = "...")] or #[error_chain(foreign)] or #[error_chain(custom)]."#, variant_name)
+					});
+
 				links.push(Link {
 					variant: variant,
 					link_type: link_type,
@@ -203,7 +229,20 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 			}
 
 			let error_kind_description_cases = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable | LinkType::Foreign => {
+				LinkType::Chainable(_, _) => {
+					let variant_name = &link.variant.ident;
+					match link.custom_description {
+						Some(ref custom_description) => quote! {
+							#error_kind_name::#variant_name(ref kind) => #custom_description(err),
+						},
+
+						None => quote! {
+							#error_kind_name::#variant_name(ref kind) => kind.description(),
+						},
+					}
+				},
+
+				LinkType::Foreign(_) => {
 					let variant_name = &link.variant.ident;
 					match link.custom_description {
 						Some(ref custom_description) => quote! {
@@ -238,7 +277,20 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 			});
 
 			let error_kind_display_cases = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable | LinkType::Foreign => {
+				LinkType::Chainable(_, _) => {
+					let variant_name = &link.variant.ident;
+					match link.custom_display {
+						Some(ref custom_display) => quote! {
+							#error_kind_name::#variant_name(ref kind) => #custom_display(f, kind),
+						},
+
+						None => quote! {
+							#error_kind_name::#variant_name(ref kind) => write!(f, "{}", kind),
+						},
+					}
+				},
+
+				LinkType::Foreign(_) => {
 					let variant_name = &link.variant.ident;
 					match link.custom_display {
 						Some(ref custom_display) => quote! {
@@ -273,108 +325,115 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 			});
 
 			let error_kind_from_impls = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable => {
+				LinkType::Chainable(_, ref error_kind_ty) => {
 					let variant_name = &link.variant.ident;
-					match &link.variant.data {
-						&syn::VariantData::Tuple(ref fields) if fields.len() == 2 => {
-							let kind_ty = &fields[1].ty;
-							Some(quote! {
-								impl From<#kind_ty> for #error_kind_name {
-									fn from(err: #kind_ty) -> Self {
-										#error_kind_name::#variant_name(err)
-									}
-								}
-							})
-						},
-
-						_ => panic!("Chainable link {} must be a tuple of two elements (the chainable error type and the chainable errorkind type).", variant_name),
-					}
+					Some(quote! {
+						impl From<#error_kind_ty> for #error_kind_name {
+							fn from(kind: #error_kind_ty) -> Self {
+								#error_kind_name::#variant_name(kind)
+							}
+						}
+					})
 				},
 
-				LinkType::Foreign => None,
-
+				LinkType::Foreign(_) |
 				LinkType::Custom => None,
 			});
 
-			let error_cause_cases = links.iter().filter_map(|link| match link.link_type {
-				LinkType::Chainable => None,
+			let error_doc_comment = format!(r"The Error type.
 
-				LinkType::Foreign => {
+This struct is made of three things:
+
+- `{0}` which is used to determine the type of the error.
+- a backtrace, generated when the error is created.
+- an error chain, used for the implementation of `Error::cause()`.", error_kind_name);
+
+			let error_cause_cases = links.iter().filter_map(|link| match link.link_type {
+				LinkType::Foreign(_) => {
 					let variant_name = &link.variant.ident;
 					Some(quote! {
 						#error_kind_name::#variant_name(ref err) => err.cause(),
 					})
 				},
 
+				LinkType::Chainable(_, _) |
+				LinkType::Custom => None,
+			});
+
+			let chained_error_extract_backtrace_cases = links.iter().filter_map(|link| match link.link_type {
+				LinkType::Chainable(ref error_ty, _) => {
+					Some(quote! {
+						if let Some(err) = err.downcast_ref::<#error_ty>() {
+							return err.1.backtrace.clone();
+						}
+					})
+				},
+
+				LinkType::Foreign(_) |
 				LinkType::Custom => None,
 			});
 
 			let error_from_impls = links.iter().filter_map(|link| match link.link_type {
-				LinkType::Chainable => {
+				LinkType::Chainable(ref error_ty, _) => {
 					let variant_name = &link.variant.ident;
-					match &link.variant.data {
-						&syn::VariantData::Tuple(ref fields) if fields.len() == 2 => {
-							let ty = &fields[0].ty;
-							Some(quote! {
-								impl From<#ty> for #error_name {
-									fn from(err: #ty) -> Self {
-										#error_name(#error_kind_name::#variant_name(err.0), err.1)
-									}
-								}
-							})
-						},
-
-						_ => panic!("Chainable link {} must be a tuple of two elements (the chainable error type and the chainable errorkind type).", variant_name),
-					}
+					Some(quote! {
+						impl From<#error_ty> for #error_name {
+							fn from(err: #error_ty) -> Self {
+								#error_name(#error_kind_name::#variant_name(err.0), err.1)
+							}
+						}
+					})
 				},
 
-				LinkType::Foreign => {
+				LinkType::Foreign(ref ty) => {
 					let variant_name = &link.variant.ident;
-					match &link.variant.data {
-						&syn::VariantData::Tuple(ref fields) if fields.len() == 1 => {
-							let ty = &fields[0].ty;
-							Some(quote! {
-								impl From<#ty> for #error_name {
-									fn from(err: #ty) -> Self {
-										#error_name(#error_kind_name::#variant_name(err), (None, #make_backtrace_name()))
-									}
-								}
-							})
-						},
-
-						_ => panic!("Foreign link {} must be a tuple of one element (the foreign error type).", variant_name),
-					}
+					Some(quote! {
+						impl From<#ty> for #error_name {
+							fn from(err: #ty) -> Self {
+								Self::from_kind(#error_kind_name::#variant_name(err))
+							}
+						}
+					})
 				},
 
 				LinkType::Custom => None,
 			});
 
-			let make_backtrace_fn = if support_backtrace {
-				quote! {
-					#[allow(non_snake_case)]
-					fn #make_backtrace_name() -> Option<::std::sync::Arc<#backtrace_name>> {
-						match ::std::env::var_os("RUST_BACKTRACE") {
-							Some(ref val) if val != "0" => Some(::std::sync::Arc::new(#backtrace_name::new())),
-							_ => None
+			let extract_backtrace_fn = if support_backtrace {
+				Some(quote! {
+					fn extract_backtrace(err: &(::std::error::Error + Send + 'static)) -> Option<::std::sync::Arc<#error_chain_name::Backtrace>> {
+						if let Some(err) = err.downcast_ref::<Self>() {
+							return err.1.backtrace.clone();
 						}
-					}
-				}
-			}
-			else {
-				quote! {
-					#[allow(non_snake_case)]
-					fn #make_backtrace_name() -> Option<::std::sync::Arc<#backtrace_name>> {
+
+						#(#chained_error_extract_backtrace_cases)*
+
 						None
 					}
-				}
+				})
+			}
+			else {
+				None
+			};
+
+			let result_wrapper = if result_name == "" {
+				None
+			}
+			else {
+				Some(quote! {
+					/// Convenient wrapper around `std::Result`.
+					pub type #result_name<T> = ::std::result::Result<T, #error_name>;
+				})
 			};
 
 			quote! {
+				extern crate error_chain as #error_chain_name;
+
 				impl #error_kind_name {
-					/// Returns the description of this error kind.
+					/// A string describing the error kind.
 					pub fn description(&self) -> &str {
 						match *self {
-							#error_kind_name::Msg(ref s) => { &s },
+							#error_kind_name::Msg(ref s) => s,
 
 							#(#error_kind_description_cases)*
 						}
@@ -396,34 +455,45 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				impl <'a> From<&'a str> for #error_kind_name {
 					fn from(s: &'a str) -> Self { #error_kind_name::Msg(s.to_string()) }
 				}
+
 				impl From<String> for #error_kind_name {
 					fn from(s: String) -> Self { #error_kind_name::Msg(s) }
 				}
 
-				/// Error type.
+				impl From<#error_name> for #error_kind_name {
+					fn from(err: #error_name) -> Self { err.0 }
+				}
+
+				#[doc = #error_doc_comment]
 				#[derive(Debug)]
 				pub struct #error_name(
+					/// The kind of the error.
+					#[doc(hidden)]
 					pub #error_kind_name,
-					pub (
-						Option<Box<::std::error::Error + Send>>,
-						Option<::std::sync::Arc<#backtrace_name>>));
+
+					/// Contains the error chain and the backtrace.
+					#[doc(hidden)]
+					pub #error_chain_name::State,
+				);
 
 				#[allow(unused)]
 				impl #error_name {
-					/// Returns the kind of this error.
-					pub fn kind(&self) -> &#error_kind_name { &self.0 }
-
-					/// Converts this error into its kind.
-					pub fn into_kind(self) -> #error_kind_name { self.0 }
-
-					/// Constructs an iterator over the chained errors in this error.
-					pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a ::std::error::Error> + 'a {
-						#error_chain_iter_name(Some(self))
+					/// Constructs an error from a kind, and generates a backtrace.
+					pub fn from_kind(kind: #error_kind_name) -> #error_name {
+						#error_name(kind, #error_chain_name::State::default())
 					}
 
-					/// Gets the backtrace of this error.
-					pub fn backtrace(&self) -> Option<&#backtrace_name> {
-						(self.1).1.as_ref().map(|v| &**v)
+					/// Returns the kind of the error.
+					pub fn kind(&self) -> &#error_kind_name { &self.0 }
+
+					/// Iterates over the error chain.
+					pub fn iter(&self) -> #error_chain_name::ErrorChainIter {
+						#error_chain_name::ErrorChainIter(Some(self))
+					}
+
+					/// Returns the backtrace associated with this error.
+					pub fn backtrace(&self) -> Option<&#error_chain_name::Backtrace> {
+						self.1.backtrace()
 					}
 				}
 
@@ -431,7 +501,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					fn description(&self) -> &str { self.0.description() }
 
 					fn cause(&self) -> Option<&::std::error::Error> {
-						match (self.1).0 {
+						match self.1.next_error {
 							Some(ref c) => Some(&**c),
 							None => match self.0 {
 								#(#error_cause_cases)*
@@ -451,66 +521,55 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				#(#error_from_impls)*
 
 				impl From<#error_kind_name> for #error_name {
-					fn from(e: #error_kind_name) -> Self { #error_name(e, (None, #make_backtrace_name())) }
+					fn from(kind: #error_kind_name) -> Self { Self::from_kind(kind) }
 				}
 
 				impl <'a> From<&'a str> for #error_name {
-					fn from(s: &'a str) -> Self { #error_name(s.into(), (None, #make_backtrace_name())) }
+					fn from(s: &'a str) -> Self { Self::from_kind(s.into()) }
 				}
 
 				impl From<String> for #error_name {
-					fn from(s: String) -> Self { #error_name(s.into(), (None, #make_backtrace_name())) }
+					fn from(s: String) -> Self { Self::from_kind(s.into()) }
 				}
 
-				/// Result type.
-				pub type #result_name<T> = ::std::result::Result<T, #error_name>;
+				impl ::std::ops::Deref for #error_name {
+					type Target = #error_kind_name;
 
-				/// ChainErr trait.
-				pub trait #chain_err_name<T> {
-					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, #error_name> where F: FnOnce() -> EK, EK: Into<#error_kind_name>;
+					fn deref(&self) -> &Self::Target { &self.0 }
 				}
 
-				impl <T, E> #chain_err_name<T> for ::std::result::Result<T, E> where E: ::std::error::Error + Send + 'static {
-					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, Error> where F: FnOnce() -> EK, EK: Into<#error_kind_name> {
-						self.map_err(move |err| {
-							let err = Box::new(err) as Box<::std::error::Error+ Send + 'static>;
+				impl #error_chain_name::ChainedError for #error_name {
+					type ErrorKind = #error_kind_name;
 
-							let (err, backtrace) = match err.downcast::<#error_name>() {
-								Ok(err) => {
-									let backtrace = Some((err.1).1.clone());
-									(err as Box<::std::error::Error + Send + 'static>, backtrace)
-								},
+					fn new(kind: Self::ErrorKind, state: #error_chain_name::State) -> Self {
+						#error_name(kind, state)
+					}
 
-								Err(err) => (err, None),
-							};
+					#extract_backtrace_fn
+				}
 
-							let backtrace = backtrace.unwrap_or_else(#make_backtrace_name);
+				/// Additional methods for `Result`, for easy interaction with this crate.
+				pub trait #result_ext_name<T, E> {
+					/// If the `Result` is an `Err` then `chain_err` evaluates the closure,
+					/// which returns *some type that can be converted to `ErrorKind`*,
+					/// boxes the original error to store as the cause, then returns a new error
+					/// containing the original error.
+					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, Error>
+						where F: FnOnce() -> EK, EK: Into<ErrorKind>;
+				}
 
-							#error_name(callback().into(), (Some(err), backtrace))
+				impl<T, E> #result_ext_name<T, E> for ::std::result::Result<T, E>
+					where E: ::std::error::Error + Send + 'static {
+					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, Error>
+						where F: FnOnce() -> EK, EK: Into<ErrorKind> {
+						self.map_err(move |e| {
+							let state = #error_chain_name::State::new::<Error>(Box::new(e));
+							#error_chain_name::ChainedError::new(callback().into(), state)
 						})
 					}
 				}
 
-				#make_backtrace_fn
-
-				struct #error_chain_iter_name<'a>(pub Option<&'a ::std::error::Error>);
-
-				impl<'a> Iterator for #error_chain_iter_name<'a> {
-					type Item = &'a ::std::error::Error;
-
-					fn next<'b>(&'b mut self) -> Option<&'a ::std::error::Error> {
-						match self.0.take() {
-							Some(err) => {
-								self.0 = err.cause();
-								Some(err)
-							},
-
-							None => None,
-						}
-					}
-				}
-
-				#fake_backtrace
+				#result_wrapper
 			}
 		},
 

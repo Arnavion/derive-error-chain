@@ -3,7 +3,7 @@
 
 //! Test crate for derive-error-chain. If it runs, it's tested.
 
-extern crate backtrace;
+extern crate error_chain;
 #[macro_use]
 extern crate derive_error_chain;
 
@@ -12,16 +12,20 @@ fn main() {
 	smoke_test_2();
 	smoke_test_4();
 	smoke_test_8();
-
 	has_backtrace_depending_on_env();
 	chain_err();
+	links();
 
 	foreign_link_test::display_underlying_error();
 	foreign_link_test::finds_cause();
 	foreign_link_test::iterates();
 
-	can_disable_backtrace();
-	can_override_backtrace();
+	with_result();
+	without_result();
+	documentation();
+	rustup_regression();
+	error_patterns();
+
 	public_api_test();
 	inlined_description_and_display();
 }
@@ -30,7 +34,7 @@ fn main() {
 
 fn smoke_test_1() {
 	#[derive(Debug, error_chain)]
-	#[error_chain(error = "Error", result = "Result", chain_err = "ChainErr")]
+	#[error_chain(error = "Error", result_ext = "ResultExt", result = "Result")]
 	pub enum ErrorKind {
 		Msg(String),
 	}
@@ -89,10 +93,14 @@ fn has_backtrace_depending_on_env() {
 		MyError,
 	}
 
-	// missing RUST_BACKTRACE and RUST_BACKTRACE=0
+	let original_value = env::var_os("RUST_BACKTRACE");
+
+	// missing RUST_BACKTRACE
 	env::remove_var("RUST_BACKTRACE");
 	let err = Error::from(ErrorKind::MyError);
 	assert!(err.backtrace().is_none());
+
+	// RUST_BACKTRACE=0
 	env::set_var("RUST_BACKTRACE", "0");
 	let err = Error::from(ErrorKind::MyError);
 	assert!(err.backtrace().is_none());
@@ -101,34 +109,42 @@ fn has_backtrace_depending_on_env() {
 	env::set_var("RUST_BACKTRACE", "yes");
 	let err = Error::from(ErrorKind::MyError);
 	assert!(err.backtrace().is_some());
+
+	if let Some(var) = original_value {
+		env::set_var("RUST_BACKTRACE", var);
+	}
 }
 
 fn chain_err() {
+	use std::fmt;
+
 	#[derive(Debug, error_chain)]
 	pub enum ErrorKind {
 		Msg(String),
 
 		#[error_chain(custom)]
-		HttpStatus(u32),
+		Test,
 	}
 
-	let err: Error = ErrorKind::HttpStatus(5).into();
-	let result: Result<()> = Err(err);
-	let result = result.chain_err(|| "An HTTP error occurred");
-	let chained_error = result.err().unwrap();
-	let mut error_iter = chained_error.iter();
-	assert_eq!(
-		"An HTTP error occurred".to_string(),
-		format!("{}", error_iter.next().unwrap())
-	);
-	assert_eq!(
-		format!("{}", ErrorKind::HttpStatus(5)),
-		format!("{}", error_iter.next().unwrap())
-	);
-	assert_eq!(
-		format!("{:?}", None as Option<&::std::error::Error>),
-		format!("{:?}", error_iter.next())
-	);
+	let _: Result<()> = Err(fmt::Error).chain_err(|| "");
+	let _: Result<()> = Err(Error::from_kind(ErrorKind::Test)).chain_err(|| "");
+}
+
+fn links() {
+	mod test {
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind {
+			Msg(String),
+		}
+	}
+
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(link = "test::Error")]
+		Test(test::ErrorKind),
+	}
 }
 
 mod foreign_link_test {
@@ -154,7 +170,7 @@ mod foreign_link_test {
 	}
 
 	#[derive(Debug)]
-	pub struct ForeignErrorCause {}
+	pub struct ForeignErrorCause { }
 
 	impl ::std::error::Error for ForeignErrorCause {
 		fn description(&self) -> &'static str {
@@ -176,6 +192,9 @@ mod foreign_link_test {
 
 		#[error_chain(foreign)]
 		Foreign(ForeignError),
+
+		#[error_chain(foreign)]
+		Io(::std::io::Error),
 	}
 
 	pub fn display_underlying_error() {
@@ -223,23 +242,21 @@ mod attributes_test {
 	#[allow(unused_imports)]
 	use std::io;
 
+	#[cfg(foo)]
 	mod inner {
 		#[derive(Debug, error_chain)]
 		pub enum ErrorKind {
 			Msg(String),
-
-			#[cfg(foo)]
-			Inner(inner::Error, inner::ErrorKind),
 		}
 	}
 
 	#[derive(Debug, error_chain)]
-	#[error_chain(error = "Error", chain_err = "ErrorChain", result = "Result")]
 	pub enum ErrorKind {
 		Msg(String),
 
 		#[cfg(foo)]
-		Inner(inner::Error, inner::ErrorKind),
+		#[error_chain(link = "inner::Error")]
+		Inner(inner::ErrorKind),
 
 		#[cfg(foo)]
 		#[error_chain(foreign)]
@@ -251,45 +268,110 @@ mod attributes_test {
 	}
 }
 
+fn with_result() {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+
+	let _: Result<()> = Ok(());
+}
+
+fn without_result() {
+	#[derive(Debug, error_chain)]
+	#[error_chain(result = "")]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+
+	let _: Result<(), ()> = Ok(());
+}
+
+fn documentation() {
+	mod inner {
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind {
+			Msg(String),
+		}
+	}
+
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		/// Doc
+		#[error_chain(link = "inner::Error")]
+		Inner(inner::ErrorKind),
+
+		/// Doc
+		#[error_chain(foreign)]
+		Io(::std::io::Error),
+
+		/// Doc
+		#[error_chain(custom)]
+		Variant,
+	}
+}
+
+mod multiple_error_same_mod {
+	#[derive(Debug, error_chain)]
+	#[error_chain(error = "MyError", result_ext = "MyResultExt", result = "MyResult")]
+	pub enum MyErrorKind {
+		Msg(String),
+	}
+
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+}
+
+#[deny(dead_code)]
+mod allow_dead_code {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+}
+
+// Make sure links actually work!
+fn rustup_regression() {
+	mod mock {
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind {
+			Msg(String),
+		}
+	}
+
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(link = "mock::Error")]
+		Download(mock::ErrorKind),
+
+		#[error_chain(custom)]
+		#[error_chain(description = r#"(|| "could not locate working directory")"#)]
+		LocatingWorkingDir,
+	}
+}
+
+fn error_patterns() {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+	}
+
+	// Tuples look nice when matching errors
+	match Error::from("Test") {
+		Error(ErrorKind::Msg(_), _) => {
+		}
+	}
+}
+
 // Own tests
 
-fn can_disable_backtrace() {
-	#[derive(Debug, error_chain)]
-	#[error_chain(backtrace = "")]
-	pub enum ErrorKind {
-		Msg(String),
-	}
-
-	let err: Error = ErrorKind::Msg("foo".to_string()).into();
-	assert!(err.backtrace().is_none());
-	assert_eq!(
-		r#"Error(Msg("foo"), (None, None))"#,
-		format!("{:?}", err)
-	);
-}
-
-fn can_override_backtrace() {
-	#[derive(Debug)]
-	pub struct MyBacktrace;
-	impl MyBacktrace {
-		fn new() -> MyBacktrace { MyBacktrace }
-	}
-
-	#[derive(Debug, error_chain)]
-	#[error_chain(backtrace = "MyBacktrace")]
-	pub enum ErrorKind {
-		Msg(String),
-	}
-
-	let err: Error = ErrorKind::Msg("foo".to_string()).into();
-	let _: &MyBacktrace = err.backtrace().unwrap();
-	assert_eq!(
-		r#"Error(Msg("foo"), (None, Some(MyBacktrace)))"#,
-		format!("{:?}", err)
-	);
-}
-
-mod test {
+mod test2 {
 	#[derive(Debug, error_chain)]
 	pub enum ErrorKind {
 		Msg(String),
@@ -300,12 +382,12 @@ mod test {
 }
 
 fn public_api_test() {
-	use test::{ Error, ErrorKind, ChainErr, Result };
+	use test2::{ Error, ErrorKind, ResultExt, Result };
 
 	let err: Error = ErrorKind::HttpStatus(5).into();
 	let result: Result<()> = Err(err);
 
-	result.chain_err(|| "An HTTP error occurred").err().unwrap();
+	let _: Result<()> = result.chain_err(|| "An HTTP error occurred");
 }
 
 fn inlined_description_and_display() {
