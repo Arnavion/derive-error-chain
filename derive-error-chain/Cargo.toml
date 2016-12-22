@@ -15,7 +15,7 @@ repository = "https://github.com/Arnavion/derive-error-chain"
 
 [dependencies]
 quote = "0.3.x"
-syn = "0.10.x"
+syn = { version = "0.10.x", features = ["parsing", "full"] }
 
 [lib]
 proc-macro = true

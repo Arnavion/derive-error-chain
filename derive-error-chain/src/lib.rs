@@ -143,8 +143,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	struct Link {
 		variant: syn::Variant,
 		link_type: LinkType,
-		custom_description: Option<syn::Path>,
-		custom_display: Option<syn::Path>,
+		custom_description: Option<syn::Expr>,
+		custom_display: Option<syn::Expr>,
 	}
 
 	enum LinkType {
@@ -200,10 +200,10 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 											}
 										}
 										else if ident == "description" {
-											custom_description = Some(syn::Path::from(value.clone()));
+											custom_description = Some(syn::parse_expr(value).unwrap());
 										}
 										else if ident == "display" {
-											custom_display = Some(syn::Path::from(value.clone()));
+											custom_display = Some(syn::parse_expr(value).unwrap());
 										}
 									},
 
