@@ -28,7 +28,7 @@ fn can_disable_backtrace() {
 #[deny(dead_code)]
 mod allow_dead_code {
 	#[derive(Debug, error_chain)]
-	#[error_chain(backtrace = "false")]
+	#[error_chain(result = "", backtrace = "false")]
 	pub enum ErrorKind {
 		Msg(String),
 	}

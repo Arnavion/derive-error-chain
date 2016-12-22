@@ -329,6 +329,7 @@ mod multiple_error_same_mod {
 #[deny(dead_code)]
 mod allow_dead_code {
 	#[derive(Debug, error_chain)]
+	#[error_chain(result = "")]
 	pub enum ErrorKind {
 		Msg(String),
 	}
