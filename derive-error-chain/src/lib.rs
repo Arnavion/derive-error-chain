@@ -196,7 +196,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 														}),
 														fields[0].ty.clone())),
 
-												_ => panic!("Foreign link {} must be a tuple of one element (the foreign error type).", variant.ident),
+												_ => panic!("Chainable link {} must be a tuple of one element (the chainable error kind).", variant.ident),
 											}
 										}
 										else if ident == "description" {
