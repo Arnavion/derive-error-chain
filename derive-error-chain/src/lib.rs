@@ -101,9 +101,9 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let ast = syn::parse_macro_input(&source).unwrap();
 	let error_kind_name = ast.ident;
 
-	let mut error_name = syn::Ident::from("Error");
-	let mut result_ext_name = syn::Ident::from("ResultExt");
-	let mut result_name = syn::Ident::from("Result");
+	let mut error_name = syn::parse_ident("Error").unwrap();
+	let mut result_ext_name = syn::parse_ident("ResultExt").unwrap();
+	let mut result_name = Some(syn::parse_ident("Result").unwrap());
 	let mut support_backtrace = true;
 
 	for attr in ast.attrs {
@@ -113,16 +113,22 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					match *nested_meta_item {
 						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
 							if ident == "error" {
-								error_name = syn::Ident::from(value.clone());
+								error_name = syn::parse_ident(value).map_err(|err| format!("couldn't parse error attribute as an identifier - {}", err)).unwrap()
 							}
 							else if ident == "result_ext" {
-								result_ext_name = syn::Ident::from(value.clone());
+								result_ext_name = syn::parse_ident(value).map_err(|err| format!("couldn't parse result_ext attribute as an identifier - {}", err)).unwrap()
 							}
 							else if ident == "result" {
-								result_name = syn::Ident::from(value.clone());
+								result_name =
+									if value == "" {
+										None
+									}
+									else {
+										Some(syn::parse_ident(value).map_err(|err| format!("couldn't parse result attribute as an identifier - {}", err)).unwrap())
+									}
 							}
 							else if ident == "backtrace" && value == "false" {
-								support_backtrace = false;
+								support_backtrace = false
 							}
 						},
 
@@ -138,7 +144,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		}
 	}
 
-	let error_chain_name = syn::Ident::from(error_name.to_string() + "_error_chain");
+	let error_chain_name = syn::parse_ident(&(error_name.to_string() + "_error_chain")).unwrap();
 
 	struct Link {
 		variant: syn::Variant,
@@ -416,15 +422,10 @@ This struct is made of three things:
 				None
 			};
 
-			let result_wrapper = if result_name == "" {
-				None
-			}
-			else {
-				Some(quote! {
-					/// Convenient wrapper around `std::Result`.
-					pub type #result_name<T> = ::std::result::Result<T, #error_name>;
-				})
-			};
+			let result_wrapper = result_name.map(|result_name| quote! {
+				/// Convenient wrapper around `std::Result`.
+				pub type #result_name<T> = ::std::result::Result<T, #error_name>;
+			});
 
 			quote! {
 				extern crate error_chain as #error_chain_name;
@@ -591,7 +592,7 @@ fn fields_pattern(variant: &syn::Variant) -> quote::Tokens {
 
 		syn::VariantData::Tuple(ref fields) => {
 			let fields = fields.iter().enumerate().map(|(i, _)| {
-				let field_name = syn::Ident::from(format!("value{}", i));
+				let field_name = syn::parse_ident(&format!("value{}", i)).unwrap();
 				quote!(ref #field_name)
 			});
 			quote!((#(#fields),*))
@@ -621,7 +622,7 @@ fn args(variant: &syn::Variant) -> quote::Tokens {
 
 		syn::VariantData::Tuple(ref fields) => {
 			let fields = fields.iter().enumerate().map(|(i, _)| {
-				let field_name = syn::Ident::from(format!("value{}", i));
+				let field_name = syn::parse_ident(&format!("value{}", i)).unwrap();
 				quote!(#field_name)
 			});
 			quote!((#(#fields),*))
