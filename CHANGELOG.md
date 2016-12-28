@@ -1,3 +1,8 @@
+# v0.7.2 (2016-12-28)
+
+- Removed `#[doc(hidden)]` on members of `Error` struct.
+- Added new methods to `ChainedError` impl for compatibility with `error-chain` v0.7.2
+
 # v0.7.1 (2016-12-23)
 
 - Fixed error message for malformed chainable links.
