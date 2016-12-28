@@ -487,7 +487,7 @@ This struct is made of three things:
 
 					/// Iterates over the error chain.
 					pub fn iter(&self) -> #error_chain_name::ErrorChainIter {
-						#error_chain_name::ErrorChainIter(Some(self))
+						#error_chain_name::ChainedError::iter(self)
 					}
 
 					/// Returns the backtrace associated with this error.
@@ -542,6 +542,22 @@ This struct is made of three things:
 
 					fn new(kind: Self::ErrorKind, state: #error_chain_name::State) -> Self {
 						#error_name(kind, state)
+					}
+
+					fn from_kind(kind: Self::ErrorKind) -> Self {
+						Self::from_kind(kind)
+					}
+
+					fn kind(&self) -> &Self::ErrorKind {
+						self.kind()
+					}
+
+					fn iter(&self) -> #error_chain_name::ErrorChainIter {
+						#error_chain_name::ErrorChainIter(Some(self))
+					}
+
+					fn backtrace(&self) -> Option<&#error_chain_name::Backtrace> {
+						self.backtrace()
 					}
 
 					#extract_backtrace_fn
