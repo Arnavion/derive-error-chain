@@ -469,11 +469,9 @@ This struct is made of three things:
 				#[derive(Debug)]
 				pub struct #error_name(
 					/// The kind of the error.
-					#[doc(hidden)]
 					pub #error_kind_name,
 
 					/// Contains the error chain and the backtrace.
-					#[doc(hidden)]
 					pub #error_chain_name::State,
 				);
 
