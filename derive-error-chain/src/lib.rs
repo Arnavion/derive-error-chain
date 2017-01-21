@@ -290,7 +290,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						},
 
 						None => quote! {
-							#error_kind_name::#variant_name(ref kind) => write!(f, "{}", kind),
+							#error_kind_name::#variant_name(ref kind) => ::std::fmt::Display::fmt(kind, f),
 						},
 					}
 				},
@@ -303,7 +303,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						},
 
 						None => quote! {
-							#error_kind_name::#variant_name(ref err) => write!(f, "{}", err),
+							#error_kind_name::#variant_name(ref err) => ::std::fmt::Display::fmt(err, f),
 						},
 					}
 				},
@@ -322,7 +322,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						None => {
 							let pattern = fields_pattern_ignore(&link.variant);
 							quote! {
-								#error_kind_name::#variant_name #pattern => write!(f, "{}", self.description()),
+								#error_kind_name::#variant_name #pattern => ::std::fmt::Display::fmt(self.description(), f),
 							}
 						},
 					}
@@ -443,7 +443,7 @@ This struct is made of three things:
 				impl ::std::fmt::Display for #error_kind_name {
 					fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 						match *self {
-							#error_kind_name::Msg(ref s) => write!(f, "{}", s),
+							#error_kind_name::Msg(ref s) => ::std::fmt::Display::fmt(s, f),
 
 							#(#error_kind_display_cases)*
 						}
