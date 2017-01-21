@@ -1,3 +1,9 @@
+# v0.8.0 (2017-01-20)
+
+- BREAKING CHANGE: Custom description and display function expressions now receive the variant fields as separate parameters instead of in a single tuple.
+- BREAKING CHANGE: Added `Sync` bound on the `ResultExt` trait and `ChainedError::extract_backtrace` function for compatibility with `error-chain` v0.8.0
+- Added new `cause = ...` item to variant attribute to override the default value returned by `::std::error::Error::cause()`
+
 # v0.7.2 (2016-12-28)
 
 - Removed `#[doc(hidden)]` on members of `Error` struct.
