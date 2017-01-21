@@ -37,15 +37,13 @@
 //! mod other_error {
 //!     #[derive(Debug, error_chain)]
 //!     pub enum ErrorKind {
-//!         Msg(String), // A special variant that must always be present.
+//!         Msg(String),
 //!     }
 //! }
 //!
 //! #[derive(Debug, error_chain)]
-//! // This attribute is optional if using the default names "Error", "ResultExt" and "Result".
-//! #[error_chain(error = "Error", result_ext = "ResultExt", result = "Result")]
 //! pub enum ErrorKind {
-//!     Msg(String), // A special variant that must always be present.
+//!     Msg(String),
 //!
 //!     #[cfg(unix)]
 //!     #[error_chain(link = "other_error::Error")]
@@ -58,36 +56,155 @@
 //!     #[error_chain(foreign)]
 //!     Io(::std::io::Error),
 //!
-//!     #[error_chain(custom, description = "invalid_toolchain_name_description", display = "invalid_toolchain_name_display")]
+//!     #[error_chain(custom, description = "invalid_toolchain_name_error_description", display = "invalid_toolchain_name_error_display")]
 //!     InvalidToolchainName(String),
 //! }
 //!
-//! // A description function receives refs to all the variant constituents, and should return a &str
-//! fn invalid_toolchain_name_description(_: &str) -> &str {
+//! fn invalid_toolchain_name_error_description(_: &str) -> &str {
 //!     "invalid toolchain name"
 //! }
 //!
-//! // A display function receives a formatter and refs to all the variant constituents, and should return a ::std::fmt::Result
-//! fn invalid_toolchain_name_display(f: &mut ::std::fmt::Formatter, t: &str) -> ::std::fmt::Result {
+//! fn invalid_toolchain_name_error_display(f: &mut ::std::fmt::Formatter, t: &str) -> ::std::fmt::Result {
 //!     write!(f, "invalid toolchain name: '{}'", t)
 //! }
 //! ```
 //!
-//! Notes:
+//! # Notes
 //!
-//! - This library requires the nightly compiler to be able to use the `proc_macro` rust feature.
-//! - The macro output can be used with `#[deny(missing_docs)]` since it allows doc comments on the ErrorKind variants.
-//! - The result wrapper can be disabled by setting `result = ""` in the `#[error_chain]` attribute on the ErrorKind.
-//! - The backtrace functionality can be disabled by setting `backtrace = "false"` or `backtrace = false` in the `#[error_chain]` attribute on the ErrorKind.
-//! - The ErrorKind must have a special `Msg(String)` member. Unlike error_chain which adds this member implicitly, this macro requires it explicitly.
-//! - The description and display functions can be inlined like this:
+//! - The ErrorKind must derive `Debug`
+//! - The ErrorKind must have `pub` visibility.
+//! - The ErrorKind must have a special `Msg(String)` member. Unlike `error_chain!` which adds this member implicitly, this macro requires it explicitly.
+//! - Doc comments and other attributes can be applied on the enum variants without any special syntax.
+//! - Rust will complain about using custom derives if you have `#[macro_use] extern crate derive_error_chain;` before `#[macro_use] extern crate error_chain;`.
+//!     Instead, you will need to put the extern for `derive_error_chain` *after* the extern for `error_chain`
 //!
-//!    ```ignore
+//! # Enum attributes
+//!
+//! - `#[error_chain(error = "ErrorName")]`
+//!
+//!     Override the name of the generated `Error` struct to the given name. If not provided, the struct will be named `Error`.
+//!
+//! - `#[error_chain(result_ext = "ResultExtName")]`
+//!
+//!     Override the name of the generated `ResultExt` trait to the given name. If not provided, the trait will be named `ResultExt`.
+//!
+//! - `#[error_chain(result = "ResultName")]`
+//!
+//!     Override the name of the generated `Result` type alias to the given name. If not provided, the alias will be named `Result`.
+//!     If set to the empty string `""`, the alias will not be generated at all.
+//!
+//! - `#[error_chain(backtrace = "false")]` or `#[error_chain(backtrace = false)]`
+//!
+//!     Disable backtrace functionality in the generated code. This should be kept in sync with the value of the `backtrace` feature of the `error-chain` crate.
+//!     In other words, if you set `backtrace = "false"` here, you must also specify `default-features = false` for `error-chain` in your `Cargo.toml`
+//!
+//! # Variant definitions
+//!
+//! - Chainable links
+//!
+//!     ```ignore
+//!     #[error_chain(link = "other_error::Error")]
+//!     Another(other_error::ErrorKind),
+//!     ```
+//!
+//!     A chainable link is an error and errorkind that have been generated using `error-chain` or `derive-error-chain`. The variant must have a single field
+//!     to hold the chained errorkind, and the `link` attribute must specify a path to the chained error.
+//!
+//! - Foreign links
+//!
+//!     ```ignore
+//!     #[error_chain(foreign)]
+//!     Fmt(::std::fmt::Error),
+//!     ```
+//!
+//!     A foreign link is an error that implements `::std::error::Error` but otherwise does not follow `error-chain`'s conventions. The variant must have
+//!     a single field to hold the foreign error.
+//!
+//! - Custom links
+//!
+//!     ```ignore
 //!     #[error_chain(custom)]
-//!     #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
-//!     #[error_chain(display = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
 //!     InvalidToolchainName(String),
-//!    ```
+//!     ```
+//!
+//!     A custom link is an arbitrary variant that can hold any members.
+//!
+//! # Variant attributes
+//!
+//! In addition to the above attributes that identify the type of the variant's link, the below attributes can be used on all links.
+//!
+//! - `#[error_chain(description = "some_function_expression")]`
+//!
+//!     Specifies a function expression to be used to implement `ErrorKind::description()`.
+//!     This value is also returned from the implementation of `::std::error::Error::description()` on the generated `Error`.
+//!
+//!     The function expression can refer to a separate function:
+//!
+//!     ```ignore
+//!         #[error_chain(description = "invalid_toolchain_name_error_description")]
+//!         InvalidToolchainName(String),
+//!
+//!     // <snip>
+//!
+//!     fn invalid_toolchain_name_error_description(_: &str) -> &str {
+//!         "invalid toolchain name"
+//!     }
+//!     ```
+//!
+//!     or it can be an inline lambda wrapped in parentheses:
+//!
+//!     ```ignore
+//!         #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
+//!     The function expression must have the signature `(...) -> &'static str`. It should have one parameter for each field of the variant.
+//!     The fields are passed in by reference.
+//!
+//!     Thus in the above example, since `InvalidToolchainName` had a single field of type `String`, the function expression needed to be of type
+//!     `(&str) -> &'static str`
+//!
+//!     If not specified, the default implementation behaves in this way:
+//!
+//!     - Chainable links: Forwards to the chained error kind's `description()`
+//!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::description()`
+//!     - Custom links: Returns the stringified name of the variant.
+//!
+//! - `#[error_chain(display = "some_function_expression")]`
+//!
+//!     Specifies a function expression to be used to implement `::std::fmt::Display::fmt()` on the `ErrorKind` and generated `Error`
+//!
+//!     This can be a separate function:
+//!
+//!     ```ignore
+//!         #[error_chain(display = "invalid_toolchain_name_error_display")]
+//!         InvalidToolchainName(String),
+//!
+//!     // <snip>
+//!
+//!     fn invalid_toolchain_name_error_display(f: &mut ::std::fmt::Formatter, t: &str) -> ::std::fmt::Result {
+//!         write!(f, "invalid toolchain name: '{}'", t)
+//!     }
+//!     ```
+//!
+//!     or an inline lambda wrapped in parentheses:
+//!
+//!     ```ignore
+//!         #[error_chain(description = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
+//!     The function expression must have the signature `(&mut ::std::fmt::Formatter, ...) -> ::std::fmt::Result`.
+//!     It should have one `&mut ::std::fmt::Formatter` parameter, and one parameter for each field of the variant. The fields are passed in by reference.
+//!
+//!     Thus in the above example, since `InvalidToolchainName` had a single field of type `String`, the function expression needed to be of type
+//!     `(&mut ::std::fmt::Formatter, &str) -> ::std::fmt::Result`
+//!
+//!     If not specified, the default implementation of `::std::fmt::Display::fmt()` behaves in this way:
+//!
+//!     - Chainable links: Forwards to the chained errorkind's implementation of `::std::fmt::Display::fmt()`
+//!     - Foreign links: Forwards to the foreign error's implementation of `::std::fmt::Display::fmt()`
+//!     - Custom links: Writes the description of the variant to the formatter.
 
 extern crate proc_macro;
 #[macro_use]
