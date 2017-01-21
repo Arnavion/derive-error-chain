@@ -576,7 +576,7 @@ This struct is made of three things:
 
 			let extract_backtrace_fn = if support_backtrace {
 				Some(quote! {
-					fn extract_backtrace(err: &(::std::error::Error + Send + 'static)) -> Option<::std::sync::Arc<#error_chain_name::Backtrace>> {
+					fn extract_backtrace(err: &(::std::error::Error + Sync + Send + 'static)) -> Option<::std::sync::Arc<#error_chain_name::Backtrace>> {
 						if let Some(err) = err.downcast_ref::<Self>() {
 							return err.1.backtrace.clone();
 						}
@@ -743,7 +743,7 @@ This struct is made of three things:
 				}
 
 				impl<T, E> #result_ext_name<T, E> for ::std::result::Result<T, E>
-					where E: ::std::error::Error + Send + 'static {
+					where E: ::std::error::Error + Sync + Send + 'static {
 					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, Error>
 						where F: FnOnce() -> EK, EK: Into<ErrorKind> {
 						self.map_err(move |e| {

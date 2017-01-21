@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["Arnavion <arnavion@gmail.com>"]
 
 [dependencies]
-error-chain = { version = "0.7.x", default-features = false }
+error-chain = { version = "0.8.x", default-features = false }
 derive-error-chain = { path = "../derive-error-chain" }
