@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![feature(conservative_impl_trait, proc_macro)]
 
 //! Test crate for derive-error-chain. If it runs, it's tested.
 
