@@ -26,7 +26,8 @@ fn main() {
 	error_patterns();
 
 	public_api_test();
-	inlined_description_and_display();
+	cause();
+	inlined_description_and_display_and_cause();
 }
 
 // Upstream tests
@@ -390,7 +391,25 @@ fn public_api_test() {
 	let _: Result<()> = result.chain_err(|| "An HTTP error occurred");
 }
 
-fn inlined_description_and_display() {
+fn cause() {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(custom)]
+		#[error_chain(cause = "file_io_error_cause")]
+		FileIO(::std::path::PathBuf, ::std::io::Error),
+	}
+
+	fn file_io_error_cause<'a>(_: &::std::path::Path, err: &'a ::std::io::Error) -> &'a ::std::error::Error {
+		err
+	}
+
+	let err: Error = ErrorKind::FileIO(::std::path::PathBuf::new(), ::std::io::Error::from_raw_os_error(1)).into();
+	assert!(::std::error::Error::cause(&err).is_some());
+}
+
+fn inlined_description_and_display_and_cause() {
 	#[derive(Debug, error_chain)]
 	pub enum ErrorKind {
 		Msg(String),
@@ -399,9 +418,16 @@ fn inlined_description_and_display() {
 		#[error_chain(description = r#"(|_| "http request returned an unsuccessful status code")"#)]
 		#[error_chain(display = r#"(|f: &mut ::std::fmt::Formatter, e| write!(f, "http request returned an unsuccessful status code: {}", e))"#)]
 		HttpStatus(u32),
+
+		#[error_chain(custom)]
+		#[error_chain(cause = "(|_, err| err)")]
+		FileIO(::std::path::PathBuf, ::std::io::Error),
 	}
 
 	let err: Error = ErrorKind::HttpStatus(5).into();
 	assert_eq!("http request returned an unsuccessful status code", ::std::error::Error::description(&err));
 	assert_eq!("http request returned an unsuccessful status code: 5".to_string(), format!("{}", err));
+
+	let err: Error = ErrorKind::FileIO(::std::path::PathBuf::new(), ::std::io::Error::from_raw_os_error(1)).into();
+	assert!(::std::error::Error::cause(&err).is_some());
 }

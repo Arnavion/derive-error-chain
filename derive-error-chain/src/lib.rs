@@ -205,6 +205,42 @@
 //!     - Chainable links: Forwards to the chained errorkind's implementation of `::std::fmt::Display::fmt()`
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::fmt::Display::fmt()`
 //!     - Custom links: Writes the description of the variant to the formatter.
+//!
+//! - `#[error_chain(cause = "some_function_expression")]`
+//!
+//!     Specifies a function expression to be used to implement `::std::fmt::Error::cause()` on the generated `Error`
+//!
+//!     This can be a separate function:
+//!
+//!     ```ignore
+//!         #[error_chain(cause = "parse_json_file_error_cause")]
+//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!
+//!     // <snip>
+//!
+//!     fn parse_json_file_error_cause<'a>(_: &::std::path::Path, err: &'a ::serde_json::Error) -> &'a ::std::error::Error {
+//!         err
+//!     }
+//!     ```
+//!
+//!     or an inline lambda wrapped in parentheses:
+//!
+//!     ```ignore
+//!         #[error_chain(cause = "(|_, err| err)")]
+//!      	   JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
+//!
+//!     The function expression must have the signature `(...) -> &::std::error::Error`. It should have one parameter for each field of the variant.
+//!     The fields are passed in by reference. The result is wrapped in `Option::Some()` for returning from `::std::error::Error::cause()`
+//!
+//!     Thus in the above example, since `JSON` had two fields of type `::std::path::PathBuf` and `::serde_json::Error`, the function expression needed to be of type
+//!     `(&::std::path::Path, &::serde_json::Error) -> &::std::error::Error`
+//!
+//!     If not specified, the default implementation of `::std::error::Error::cause()` behaves in this way:
+//!
+//!     - Chainable links: Returns `None`
+//!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::cause()`
+//!     - Custom links: Returns `None`
 
 extern crate proc_macro;
 #[macro_use]
@@ -267,6 +303,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		link_type: LinkType,
 		custom_description: Option<syn::Expr>,
 		custom_display: Option<syn::Expr>,
+		custom_cause: Option<syn::Expr>,
 	}
 
 	enum LinkType {
@@ -287,6 +324,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				let mut link_type = None;
 				let mut custom_description = None;
 				let mut custom_display = None;
+				let mut custom_cause = None;
 
 				for attr in &variant.attrs {
 					if let syn::MetaItem::List(ref ident, ref nested_meta_items) = attr.value {
@@ -327,6 +365,9 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 										else if ident == "display" {
 											custom_display = Some(syn::parse_expr(value).unwrap());
 										}
+										else if ident == "cause" {
+											custom_cause = Some(syn::parse_expr(value).unwrap());
+										}
 									},
 
 									_ => { },
@@ -347,6 +388,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					link_type: link_type,
 					custom_description: custom_description,
 					custom_display: custom_display,
+					custom_cause: custom_cause,
 				});
 			}
 
@@ -462,6 +504,29 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				LinkType::Custom => None,
 			});
 
+			let error_cause_cases = links.iter().filter_map(|link|
+				if let Some(custom_cause) = link.custom_cause.as_ref() {
+					let variant_name = &link.variant.ident;
+					let pattern = fields_pattern(&link.variant);
+					let args = args(&link.variant);
+					Some(quote! {
+						#error_kind_name::#variant_name #pattern => Some(#custom_cause(#args)),
+					})
+				}
+				else {
+					match link.link_type {
+						LinkType::Foreign(_) => {
+							let variant_name = &link.variant.ident;
+							Some(quote! {
+								#error_kind_name::#variant_name(ref err) => ::std::error::Error::cause(err),
+							})
+						},
+
+						LinkType::Chainable(_, _) |
+						LinkType::Custom => None,
+					}
+				});
+
 			let error_doc_comment = format!(r"The Error type.
 
 This struct is made of three things:
@@ -469,18 +534,6 @@ This struct is made of three things:
 - `{0}` which is used to determine the type of the error.
 - a backtrace, generated when the error is created.
 - an error chain, used for the implementation of `Error::cause()`.", error_kind_name);
-
-			let error_cause_cases = links.iter().filter_map(|link| match link.link_type {
-				LinkType::Foreign(_) => {
-					let variant_name = &link.variant.ident;
-					Some(quote! {
-						#error_kind_name::#variant_name(ref err) => err.cause(),
-					})
-				},
-
-				LinkType::Chainable(_, _) |
-				LinkType::Custom => None,
-			});
 
 			let chained_error_extract_backtrace_cases = links.iter().filter_map(|link| match link.link_type {
 				LinkType::Chainable(ref error_ty, _) => {
