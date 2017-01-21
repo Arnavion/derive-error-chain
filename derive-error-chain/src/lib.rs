@@ -592,7 +592,7 @@ This struct is made of three things:
 			};
 
 			let result_wrapper = result_name.map(|result_name| quote! {
-				/// Convenient wrapper around `std::Result`.
+				/// Convenient wrapper around `::std::result::Result`
 				pub type #result_name<T> = ::std::result::Result<T, #error_name>;
 			});
 
