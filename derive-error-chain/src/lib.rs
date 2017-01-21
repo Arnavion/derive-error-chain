@@ -630,7 +630,7 @@ fn args(variant: &syn::Variant) -> quote::Tokens {
 				let field_name = &f.ident;
 				quote!(#field_name)
 			});
-			quote!((#(#fields),*))
+			quote!(#(#fields),*)
 		},
 
 		syn::VariantData::Tuple(ref fields) => {
@@ -638,7 +638,7 @@ fn args(variant: &syn::Variant) -> quote::Tokens {
 				let field_name = syn::parse_ident(&format!("value{}", i)).unwrap();
 				quote!(#field_name)
 			});
-			quote!((#(#fields),*))
+			quote!(#(#fields),*)
 		},
 
 		syn::VariantData::Unit => quote!(),
