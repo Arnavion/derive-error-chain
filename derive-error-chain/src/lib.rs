@@ -250,7 +250,7 @@ extern crate syn;
 #[proc_macro_derive(error_chain, attributes(error_chain))]
 pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let source = input.to_string();
-	let ast = syn::parse_macro_input(&source).unwrap();
+	let ast = syn::parse_derive_input(&source).unwrap();
 	let error_kind_name = ast.ident;
 
 	let mut error_name = syn::parse_ident("Error").unwrap();
