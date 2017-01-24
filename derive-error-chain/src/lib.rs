@@ -760,7 +760,7 @@ This struct is made of three things:
 		_ => panic!("#[derive(error_chain)] can only be used with enums."),
 	};
 
-	result.to_string().parse().unwrap()
+	result.parse().unwrap()
 }
 
 fn fields_pattern(variant: &syn::Variant) -> quote::Tokens {
