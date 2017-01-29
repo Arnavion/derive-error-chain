@@ -1,0 +1,12 @@
+language: rust
+rust:
+- beta
+- nightly
+
+script: cd $CRATE && cargo build --verbose && cargo run
+
+env:
+- CRATE=derive-error-chain-tests
+- CRATE=derive-error-chain-tests-no-backtrace
+
+sudo: false
