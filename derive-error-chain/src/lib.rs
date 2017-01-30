@@ -23,10 +23,10 @@
 //!     }
 //!
 //!     errors {
-//!     	InvalidToolchainName(t: String) {
-//!     		description("invalid toolchain name")
-//!     		display("invalid toolchain name: '{}'", t)
-//!     	}
+//!         InvalidToolchainName(t: String) {
+//!             description("invalid toolchain name")
+//!             display("invalid toolchain name: '{}'", t)
+//!         }
 //!     }
 //! }
 //! ```
@@ -227,7 +227,7 @@
 //!
 //!     ```ignore
 //!         #[error_chain(cause = "(|_, err| err)")]
-//!      	   JSON(::std::path::PathBuf, ::serde_json::Error),
+//!         JSON(::std::path::PathBuf, ::serde_json::Error),
 //!     ```
 //!
 //!     The function expression must have the signature `(...) -> &::std::error::Error`. It should have one parameter for each field of the variant.
