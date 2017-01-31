@@ -56,16 +56,10 @@
 //!     #[error_chain(foreign)]
 //!     Io(::std::io::Error),
 //!
-//!     #[error_chain(custom, description = "invalid_toolchain_name_error_description", display = "invalid_toolchain_name_error_display")]
+//!     #[error_chain(custom)]
+//!     #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
+//!     #[error_chain(display = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
 //!     InvalidToolchainName(String),
-//! }
-//!
-//! fn invalid_toolchain_name_error_description(_: &str) -> &str {
-//!     "invalid toolchain name"
-//! }
-//!
-//! fn invalid_toolchain_name_error_display(f: &mut ::std::fmt::Formatter, t: &str) -> ::std::fmt::Result {
-//!     write!(f, "invalid toolchain name: '{}'", t)
 //! }
 //! ```
 //!
@@ -148,7 +142,14 @@
 //!     Specifies a function expression to be used to implement `ErrorKind::description()`.
 //!     This value is also returned from the implementation of `::std::error::Error::description()` on the generated `Error`.
 //!
-//!     The function expression can refer to a separate function:
+//!     The function expression can be an inline lambda wrapped in parentheses:
+//!
+//!     ```ignore
+//!         #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
+//!     or it can be a separate function:
 //!
 //!     ```ignore
 //!         #[error_chain(description = "invalid_toolchain_name_error_description")]
@@ -159,13 +160,6 @@
 //!     fn invalid_toolchain_name_error_description(_: &str) -> &str {
 //!         "invalid toolchain name"
 //!     }
-//!     ```
-//!
-//!     or it can be an inline lambda wrapped in parentheses:
-//!
-//!     ```ignore
-//!         #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
-//!         InvalidToolchainName(String),
 //!     ```
 //!
 //!     The function expression must have the signature `(...) -> &'static str`. It should have one parameter for each field of the variant.
@@ -184,7 +178,14 @@
 //!
 //!     Specifies a function expression to be used to implement `::std::fmt::Display::fmt()` on the `ErrorKind` and generated `Error`
 //!
-//!     This can be a separate function:
+//!     This can be an inline lambda wrapped in parentheses:
+//!
+//!     ```ignore
+//!         #[error_chain(description = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
+//!     or it can be a separate function:
 //!
 //!     ```ignore
 //!         #[error_chain(display = "invalid_toolchain_name_error_display")]
@@ -195,13 +196,6 @@
 //!     fn invalid_toolchain_name_error_display(f: &mut ::std::fmt::Formatter, t: &str) -> ::std::fmt::Result {
 //!         write!(f, "invalid toolchain name: '{}'", t)
 //!     }
-//!     ```
-//!
-//!     or an inline lambda wrapped in parentheses:
-//!
-//!     ```ignore
-//!         #[error_chain(description = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
-//!         InvalidToolchainName(String),
 //!     ```
 //!
 //!     The function expression must have the signature `(&mut ::std::fmt::Formatter, ...) -> ::std::fmt::Result`.
@@ -220,7 +214,14 @@
 //!
 //!     Specifies a function expression to be used to implement `::std::fmt::Error::cause()` on the generated `Error`
 //!
-//!     This can be a separate function:
+//!     This can be an inline lambda wrapped in parentheses:
+//!
+//!     ```ignore
+//!         #[error_chain(cause = "(|_, err| err)")]
+//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
+//!
+//!     or it can be a separate function:
 //!
 //!     ```ignore
 //!         #[error_chain(cause = "parse_json_file_error_cause")]
@@ -231,13 +232,6 @@
 //!     fn parse_json_file_error_cause<'a>(_: &::std::path::Path, err: &'a ::serde_json::Error) -> &'a ::std::error::Error {
 //!         err
 //!     }
-//!     ```
-//!
-//!     or an inline lambda wrapped in parentheses:
-//!
-//!     ```ignore
-//!         #[error_chain(cause = "(|_, err| err)")]
-//!         JSON(::std::path::PathBuf, ::serde_json::Error),
 //!     ```
 //!
 //!     The function expression must have the signature `(...) -> &::std::error::Error`. It should have one parameter for each field of the variant.
