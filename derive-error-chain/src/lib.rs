@@ -69,14 +69,24 @@
 //! }
 //! ```
 //!
-//! # Notes
+//! So the obvious differences from `error_chain!` are:
 //!
-//! - The ErrorKind must derive `Debug`
-//! - The ErrorKind must have `pub` visibility.
-//! - The ErrorKind must have a special `Msg(String)` member. Unlike `error_chain!` which adds this member implicitly, this macro requires it explicitly.
-//! - Doc comments and other attributes can be applied on the enum variants without any special syntax.
-//! - Rust will complain about using custom derives if you have `#[macro_use] extern crate derive_error_chain;` before `#[macro_use] extern crate error_chain;`.
-//!     Instead, you will need to put the extern for `derive_error_chain` *after* the extern for `error_chain`
+//! - The ErrorKind is an enum instead of a macro invocation.
+//! - Error links are variants of the enum instead of lines inside the macro.
+//! - Links have explicit annotations marking them as chainable / foreign / custom instead of being grouped into corresponding sections of the macro.
+//! - Attributes like `#[cfg]` are applied to the variants directly instead of needing special syntax.
+//! - `description` and `display` are defined as function expressions specified as attribute values, instead of shorthands integrated into the macro syntax.
+//!
+//! The less obvious differences are:
+//!
+//! - The ErrorKind must explicitly implement `::std::fmt::Debug`, either automatically using `#[derive]` or manually implemented separately. `error_chain!` does this implicitly.
+//! - The ErrorKind must have `pub` visibility. `error_chain!` does this implicitly.
+//! - The ErrorKind must have a special `Msg(String)` member. `error_chain!` does this implicitly.
+//! - Doc comments, since they're effectively attributes, can be applied on the enum variants without any special syntax like `error_chain!` has.
+//!
+//! Also, note that Rust will misleadingly complain about using custom derives if you have `#[macro_use] extern crate derive_error_chain;`
+//! before `#[macro_use] extern crate error_chain;`. Instead, you will need to put the extern for `derive_error_chain` *after* the extern for `error_chain`.
+//! This is tracked in https://github.com/rust-lang/rust/issues/39326 to atleast get a less-misleading error.
 //!
 //! # Enum attributes
 //!
