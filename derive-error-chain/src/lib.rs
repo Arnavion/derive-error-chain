@@ -57,8 +57,8 @@
 //!     Io(::std::io::Error),
 //!
 //!     #[error_chain(custom)]
-//!     #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
-//!     #[error_chain(display = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
+//!     #[error_chain(description = r#"|_| "invalid toolchain name""#)]
+//!     #[error_chain(display = r#"|t| write!(f, "invalid toolchain name: '{}'", t)"#)]
 //!     InvalidToolchainName(String),
 //! }
 //! ```
@@ -142,10 +142,10 @@
 //!     Specifies a function expression to be used to implement `ErrorKind::description()`.
 //!     This value is also returned from the implementation of `::std::error::Error::description()` on the generated `Error`.
 //!
-//!     The function expression can be an inline lambda wrapped in parentheses:
+//!     This can be an inline lambda:
 //!
 //!     ```ignore
-//!         #[error_chain(description = r#"(|_| "invalid toolchain name")"#)]
+//!         #[error_chain(description = r#"|_| "invalid toolchain name""#)]
 //!         InvalidToolchainName(String),
 //!     ```
 //!
@@ -178,10 +178,10 @@
 //!
 //!     Specifies a function expression to be used to implement `::std::fmt::Display::fmt()` on the `ErrorKind` and generated `Error`
 //!
-//!     This can be an inline lambda wrapped in parentheses:
+//!     This can be an inline lambda:
 //!
 //!     ```ignore
-//!         #[error_chain(description = r#"(|f: &mut ::std::fmt::Formatter, t| write!(f, "invalid toolchain name: '{}'", t))"#)]
+//!         #[error_chain(description = r#"|t| write!(f, "invalid toolchain name: '{}'", t)"#)]
 //!         InvalidToolchainName(String),
 //!     ```
 //!
@@ -200,6 +200,7 @@
 //!
 //!     The function expression must have the signature `(&mut ::std::fmt::Formatter, ...) -> ::std::fmt::Result`.
 //!     It should have one `&mut ::std::fmt::Formatter` parameter, and one parameter for each field of the variant. The fields are passed in by reference.
+//!     For brevity, closure expressions do not need the `&mut ::std::fmt::Formatter` parameter and instead capture `f` from the closure environment.
 //!
 //!     Thus in the above example, since `InvalidToolchainName` had a single field of type `String`, the function expression needed to be of type
 //!     `(&mut ::std::fmt::Formatter, &str) -> ::std::fmt::Result`
@@ -214,10 +215,10 @@
 //!
 //!     Specifies a function expression to be used to implement `::std::fmt::Error::cause()` on the generated `Error`
 //!
-//!     This can be an inline lambda wrapped in parentheses:
+//!     This can be an inline lambda:
 //!
 //!     ```ignore
-//!         #[error_chain(cause = "(|_, err| err)")]
+//!         #[error_chain(cause = "|_, err| err")]
 //!         JSON(::std::path::PathBuf, ::serde_json::Error),
 //!     ```
 //!
@@ -396,100 +397,106 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				});
 			}
 
-			let error_kind_description_cases = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable(_, _) => {
-					let variant_name = &link.variant.ident;
-					match link.custom_description {
-						Some(ref custom_description) => quote! {
-							#error_kind_name::#variant_name(ref kind) => #custom_description(err),
-						},
+			let error_kind_description_cases = links.iter().map(|link| {
+				let variant_name = &link.variant.ident;
 
-						None => quote! {
-							#error_kind_name::#variant_name(ref kind) => kind.description(),
-						},
-					}
-				},
+				match (link.custom_description.as_ref(), &link.link_type) {
+					(Some(custom_description), &LinkType::Chainable(_, _)) |
+					(Some(custom_description), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
+						#error_kind_name::#variant_name(ref err) => (#custom_description)(err),
+					},
 
-				LinkType::Foreign(_) => {
-					let variant_name = &link.variant.ident;
-					match link.custom_description {
-						Some(ref custom_description) => quote! {
-							#error_kind_name::#variant_name(ref err) => #custom_description(err),
-						},
+					(Some(custom_description), &LinkType::Chainable(_, _)) |
+					(Some(custom_description), &LinkType::Foreign(_)) => quote! {
+						#error_kind_name::#variant_name(ref err) => #custom_description(err),
+					},
 
-						None => quote! {
-							#error_kind_name::#variant_name(ref err) => ::std::error::Error::description(err),
-						},
-					}
-				},
+					(Some(custom_description), &LinkType::Custom) => {
+						let pattern = fields_pattern(&link.variant);
+						let args = args(&link.variant);
 
-				LinkType::Custom => {
-					let variant_name = &link.variant.ident;
-					match link.custom_description {
-						Some(ref custom_description) => {
-							let pattern = fields_pattern(&link.variant);
-							let args = args(&link.variant);
+						if is_closure(custom_description) {
+							quote! {
+								#error_kind_name::#variant_name #pattern => (#custom_description)(#args),
+							}
+						}
+						else {
 							quote! {
 								#error_kind_name::#variant_name #pattern => #custom_description(#args),
 							}
-						},
+						}
+					},
 
-						None => {
-							let pattern = fields_pattern_ignore(&link.variant);
-							quote! {
-								#error_kind_name::#variant_name #pattern => stringify!(#variant_name),
-							}
-						},
-					}
-				},
+					(None, &LinkType::Chainable(_, _)) => quote! {
+						#error_kind_name::#variant_name(ref kind) => kind.description(),
+					},
+
+					(None, &LinkType::Foreign(_)) => quote! {
+						#error_kind_name::#variant_name(ref err) => ::std::error::Error::description(err),
+					},
+
+					(None, &LinkType::Custom) => {
+						let pattern = fields_pattern_ignore(&link.variant);
+
+						quote! {
+							#error_kind_name::#variant_name #pattern => stringify!(#variant_name),
+						}
+					},
+				}
 			});
 
-			let error_kind_display_cases = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable(_, _) => {
-					let variant_name = &link.variant.ident;
-					match link.custom_display {
-						Some(ref custom_display) => quote! {
-							#error_kind_name::#variant_name(ref kind) => #custom_display(f, kind),
-						},
+			let error_kind_display_cases = links.iter().map(|link| {
+				let variant_name = &link.variant.ident;
 
-						None => quote! {
-							#error_kind_name::#variant_name(ref kind) => ::std::fmt::Display::fmt(kind, f),
-						},
-					}
-				},
+				match (link.custom_display.as_ref(), &link.link_type) {
+					(Some(custom_display), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
+						#error_kind_name::#variant_name(ref kind) => (#custom_display)(kind),
+					},
 
-				LinkType::Foreign(_) => {
-					let variant_name = &link.variant.ident;
-					match link.custom_display {
-						Some(ref custom_display) => quote! {
-							#error_kind_name::#variant_name(ref err) => #custom_display(f, err),
-						},
+					(Some(custom_display), &LinkType::Chainable(_, _)) => quote! {
+						#error_kind_name::#variant_name(ref kind) => #custom_display(f, kind),
+					},
 
-						None => quote! {
-							#error_kind_name::#variant_name(ref err) => ::std::fmt::Display::fmt(err, f),
-						},
-					}
-				},
+					(Some(custom_display), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
+						#error_kind_name::#variant_name(ref err) => (#custom_display)(err),
+					},
 
-				LinkType::Custom => {
-					let variant_name = &link.variant.ident;
-					match link.custom_display {
-						Some(ref custom_display) => {
-							let pattern = fields_pattern(&link.variant);
-							let args = args(&link.variant);
+					(Some(custom_display), &LinkType::Foreign(_)) => quote! {
+						#error_kind_name::#variant_name(ref err) => #custom_display(f, err),
+					},
+
+					(Some(custom_display), &LinkType::Custom) => {
+						let pattern = fields_pattern(&link.variant);
+						let args = args(&link.variant);
+
+						if is_closure(custom_display) {
+							quote! {
+								#error_kind_name::#variant_name #pattern => (#custom_display)(#args),
+							}
+						}
+						else {
 							quote! {
 								#error_kind_name::#variant_name #pattern => #custom_display(f, #args),
 							}
-						},
+						}
+					},
 
-						None => {
-							let pattern = fields_pattern_ignore(&link.variant);
-							quote! {
-								#error_kind_name::#variant_name #pattern => ::std::fmt::Display::fmt(self.description(), f),
-							}
-						},
-					}
-				},
+					(None, &LinkType::Chainable(_, _)) => quote! {
+						#error_kind_name::#variant_name(ref kind) => ::std::fmt::Display::fmt(kind, f),
+					},
+
+					(None, &LinkType::Foreign(_)) => quote! {
+						#error_kind_name::#variant_name(ref err) => ::std::fmt::Display::fmt(err, f),
+					},
+
+					(None, &LinkType::Custom) => {
+						let pattern = fields_pattern_ignore(&link.variant);
+
+						quote! {
+							#error_kind_name::#variant_name #pattern => ::std::fmt::Display::fmt(self.description(), f),
+						}
+					},
+				}
 			});
 
 			let error_kind_from_impls = links.iter().map(|link| match link.link_type {
@@ -508,28 +515,34 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				LinkType::Custom => None,
 			});
 
-			let error_cause_cases = links.iter().filter_map(|link|
-				if let Some(custom_cause) = link.custom_cause.as_ref() {
-					let variant_name = &link.variant.ident;
-					let pattern = fields_pattern(&link.variant);
-					let args = args(&link.variant);
-					Some(quote! {
-						#error_kind_name::#variant_name #pattern => Some(#custom_cause(#args)),
-					})
-				}
-				else {
-					match link.link_type {
-						LinkType::Foreign(_) => {
-							let variant_name = &link.variant.ident;
-							Some(quote! {
-								#error_kind_name::#variant_name(ref err) => ::std::error::Error::cause(err),
-							})
-						},
+			let error_cause_cases = links.iter().filter_map(|link| {
+				let variant_name = &link.variant.ident;
 
-						LinkType::Chainable(_, _) |
-						LinkType::Custom => None,
-					}
-				});
+				match (link.custom_cause.as_ref(), &link.link_type) {
+					(Some(ref custom_cause), _) => Some({
+						let pattern = fields_pattern(&link.variant);
+						let args = args(&link.variant);
+
+						if is_closure(custom_cause) {
+							quote! {
+								#error_kind_name::#variant_name #pattern => Some((#custom_cause)(#args)),
+							}
+						}
+						else {
+							quote! {
+								#error_kind_name::#variant_name #pattern => Some(#custom_cause(#args)),
+							}
+						}
+					}),
+
+					(None, &LinkType::Foreign(_)) => Some(quote! {
+						#error_kind_name::#variant_name(ref err) => ::std::error::Error::cause(err),
+					}),
+
+					(None, &LinkType::Chainable(_, _)) |
+					(None, &LinkType::Custom) => None,
+				}
+			});
 
 			let error_doc_comment = format!(r"The Error type.
 
@@ -765,6 +778,15 @@ This struct is made of three things:
 	};
 
 	result.parse().unwrap()
+}
+
+fn is_closure(expr: &syn::Expr) -> bool {
+	if let syn::ExprKind::Closure(..) = expr.node {
+		true
+	}
+	else {
+		false
+	}
 }
 
 fn fields_pattern(variant: &syn::Variant) -> quote::Tokens {

@@ -352,7 +352,7 @@ fn rustup_regression() {
 		Download(mock::ErrorKind),
 
 		#[error_chain(custom)]
-		#[error_chain(description = r#"(|| "could not locate working directory")"#)]
+		#[error_chain(description = r#"|| "could not locate working directory""#)]
 		LocatingWorkingDir,
 	}
 }
@@ -415,12 +415,12 @@ fn inlined_description_and_display_and_cause() {
 		Msg(String),
 
 		#[error_chain(custom)]
-		#[error_chain(description = r#"(|_| "http request returned an unsuccessful status code")"#)]
-		#[error_chain(display = r#"(|f: &mut ::std::fmt::Formatter, e| write!(f, "http request returned an unsuccessful status code: {}", e))"#)]
+		#[error_chain(description = r#"|_| "http request returned an unsuccessful status code""#)]
+		#[error_chain(display = r#"|e| write!(f, "http request returned an unsuccessful status code: {}", e)"#)]
 		HttpStatus(u32),
 
 		#[error_chain(custom)]
-		#[error_chain(cause = "(|_, err| err)")]
+		#[error_chain(cause = "|_, err| err")]
 		FileIO(::std::path::PathBuf, ::std::io::Error),
 	}
 
