@@ -1,3 +1,8 @@
+# v0.8.1 (2017-02-01)
+
+- If giving inline lambdas to `#[error_chain(description / display / cause = "...")]` attributes, the lambdas no longer need to be wrapped in parentheses.
+- If the value of the `#[error_chain(display)]` attribute is an inline lambda that isn't wrapped in parentheses, this lambda can omit the `&mut ::std::fmt::Formatter` parameter. Instead, it can capture `f` from its environment. Lambdas in parentheses continue to need the parameter, so this isn't a breaking change.
+
 # v0.8.0 (2017-01-20)
 
 - BREAKING CHANGE: Custom description and display function expressions now receive the variant fields as separate parameters instead of in a single tuple.
