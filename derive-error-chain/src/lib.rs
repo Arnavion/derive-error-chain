@@ -403,7 +403,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				match (link.custom_description.as_ref(), &link.link_type) {
 					(Some(custom_description), &LinkType::Chainable(_, _)) |
 					(Some(custom_description), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
-						#error_kind_name::#variant_name(ref err) => (#custom_description)(err),
+						#error_kind_name::#variant_name(ref err) => {
+							#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+							let result = (#custom_description)(err);
+							result
+						},
 					},
 
 					(Some(custom_description), &LinkType::Chainable(_, _)) |
@@ -417,7 +421,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 						if is_closure(custom_description) {
 							quote! {
-								#error_kind_name::#variant_name #pattern => (#custom_description)(#args),
+								#error_kind_name::#variant_name #pattern => {
+									#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+									let result = (#custom_description)(#args);
+									result
+								},
 							}
 						}
 						else {
@@ -450,7 +458,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 				match (link.custom_display.as_ref(), &link.link_type) {
 					(Some(custom_display), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
-						#error_kind_name::#variant_name(ref kind) => (#custom_display)(kind),
+						#error_kind_name::#variant_name(ref kind) => {
+							#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+							let result = (#custom_display)(kind);
+							result
+						},
 					},
 
 					(Some(custom_display), &LinkType::Chainable(_, _)) => quote! {
@@ -458,7 +470,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					},
 
 					(Some(custom_display), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
-						#error_kind_name::#variant_name(ref err) => (#custom_display)(err),
+						#error_kind_name::#variant_name(ref err) => {
+							#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+							let result = (#custom_display)(err);
+							result
+						},
 					},
 
 					(Some(custom_display), &LinkType::Foreign(_)) => quote! {
@@ -471,7 +487,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 						if is_closure(custom_display) {
 							quote! {
-								#error_kind_name::#variant_name #pattern => (#custom_display)(#args),
+								#error_kind_name::#variant_name #pattern => {
+									#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+									let result = (#custom_display)(#args);
+									result
+								},
 							}
 						}
 						else {
@@ -525,7 +545,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 						if is_closure(custom_cause) {
 							quote! {
-								#error_kind_name::#variant_name #pattern => Some((#custom_cause)(#args)),
+								#error_kind_name::#variant_name #pattern => {
+									#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+									let result = (#custom_cause)(#args);
+									Some(result)
+								},
 							}
 						}
 						else {
