@@ -1,3 +1,8 @@
+# v0.9.0 (2017-02-07)
+
+- BREAKING CHANGE: Removed `Sync` bound on the `ResultExt` trait and `ChainedError::extract_backtrace` function for compatibility with `error-chain` v0.9.0
+- Clippy's `redundant_closure_call` warning is now suppressed on inline lambdas passed to `#[error_chain(description / display / cause = "...")]` attributes via `#[allow]` gated on the `cargo-clippy` feature. This feature is automatically defined when running clippy through cargo as `cargo clippy`
+
 # v0.8.1 (2017-02-01)
 
 - If giving inline lambdas to `#[error_chain(description / display / cause = "...")]` attributes, the lambdas no longer need to be wrapped in parentheses.
