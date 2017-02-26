@@ -632,6 +632,13 @@ This struct is made of three things:
 				None
 			};
 
+			let result_ext_chain_err_doc_comment = format!("\
+				If the `Result` is an `Err` then `chain_err` evaluates the closure, \
+				which returns *some type that can be converted to `{}`*, \
+				boxes the original error to store as the cause, then returns a new error \
+				containing the original error.\
+			", error_kind_name);
+
 			let result_wrapper = result_name.map(|result_name| quote! {
 				/// Convenient wrapper around `::std::result::Result`
 				pub type #result_name<T> = ::std::result::Result<T, #error_name>;
@@ -775,20 +782,17 @@ This struct is made of three things:
 
 				/// Additional methods for `Result`, for easy interaction with this crate.
 				pub trait #result_ext_name<T, E> {
-					/// If the `Result` is an `Err` then `chain_err` evaluates the closure,
-					/// which returns *some type that can be converted to `ErrorKind`*,
-					/// boxes the original error to store as the cause, then returns a new error
-					/// containing the original error.
-					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, Error>
-						where F: FnOnce() -> EK, EK: Into<ErrorKind>;
+					#[doc = #result_ext_chain_err_doc_comment]
+					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, #error_name>
+						where F: FnOnce() -> EK, EK: Into<#error_kind_name>;
 				}
 
 				impl<T, E> #result_ext_name<T, E> for ::std::result::Result<T, E>
 					where E: ::std::error::Error + Send + 'static {
-					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, Error>
-						where F: FnOnce() -> EK, EK: Into<ErrorKind> {
+					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, #error_name>
+						where F: FnOnce() -> EK, EK: Into<#error_kind_name> {
 						self.map_err(move |e| {
-							let state = #error_chain_name::State::new::<Error>(Box::new(e));
+							let state = #error_chain_name::State::new::<#error_name>(Box::new(e));
 							#error_chain_name::ChainedError::new(callback().into(), state)
 						})
 					}
