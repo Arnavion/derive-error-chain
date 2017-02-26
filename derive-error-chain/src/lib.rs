@@ -699,6 +699,13 @@ This struct is made of three things:
 						#error_name(kind, #error_chain_name::State::default())
 					}
 
+					/// Constructs a chained error from another error and a kind, and generates a backtrace.
+					pub fn with_chain<E, K>(error: E, kind: K) -> Self
+						where E: ::std::error::Error + Send + 'static, K: Into<#error_kind_name> {
+
+						#error_name(kind.into(), #error_chain_name::State::new::<#error_name>(Box::new(error)))
+					}
+
 					/// Returns the kind of the error.
 					pub fn kind(&self) -> &#error_kind_name { &self.0 }
 
@@ -763,6 +770,12 @@ This struct is made of three things:
 
 					fn from_kind(kind: Self::ErrorKind) -> Self {
 						Self::from_kind(kind)
+					}
+
+					fn with_chain<E, K>(error: E, kind: K) -> Self
+						where E: ::std::error::Error + Send + 'static, K: Into<Self::ErrorKind> {
+
+						Self::with_chain(error, kind)
 					}
 
 					fn kind(&self) -> &Self::ErrorKind {
