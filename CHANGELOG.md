@@ -1,3 +1,8 @@
+# v0.10.0 (2017-02-25)
+
+- Fixed `ResultExt` to use the correct names for the error kind and error structs instead of `ErrorKind` and `Error`.
+- Added new `with_chain` function to `ChainedError` impl for compatibility with `error-chain` v0.10.0
+
 # v0.9.0 (2017-02-07)
 
 - BREAKING CHANGE: Removed `Sync` bound on the `ResultExt` trait and `ChainedError::extract_backtrace` function for compatibility with `error-chain` v0.9.0
