@@ -181,7 +181,7 @@
 //!     This can be an inline lambda:
 //!
 //!     ```ignore
-//!         #[error_chain(description = r#"|t| write!(f, "invalid toolchain name: '{}'", t)"#)]
+//!         #[error_chain(display = r#"|t| write!(f, "invalid toolchain name: '{}'", t)"#)]
 //!         InvalidToolchainName(String),
 //!     ```
 //!
