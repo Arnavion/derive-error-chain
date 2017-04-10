@@ -30,9 +30,7 @@ fn main() {
 	cause();
 	inlined_description_and_display_and_cause();
 }
-
 // Upstream tests
-
 fn smoke_test_1() {
 	#[derive(Debug, error_chain)]
 	#[error_chain(error = "Error", result_ext = "ResultExt", result = "Result")]
@@ -266,6 +264,20 @@ mod attributes_test {
 		#[cfg(foo)]
 		#[error_chain(custom)]
 		AnError,
+	}
+}
+
+mod generics_test {
+	#[allow(unused_imports)]
+    use std::error;
+
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind<T: error::Error + Send + 'static> where T: Into<usize> {
+		Msg(String),
+
+		#[error_chain(custom)]
+		#[error_chain(description = r#"|_| "could not locate working directory""#)]
+		Io(T),
 	}
 }
 

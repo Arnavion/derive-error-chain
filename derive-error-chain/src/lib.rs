@@ -258,6 +258,44 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let ast = syn::parse_derive_input(&source).unwrap();
 	let error_kind_name = ast.ident;
 
+	let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+	let mut generics_lifetime = ast.generics.clone();
+	generics_lifetime.lifetimes.push(syn::LifetimeDef::new("'error_chain_lifetime"));
+	let (impl_generics_lifetime, _, _) = generics_lifetime.split_for_impl();
+	let mut generics_ext1 = ast.generics.clone();
+	generics_ext1.ty_params.push(syn::TyParam {
+        attrs: Vec::new(),
+        ident: syn::Ident::from("DERIVE_ERROR_CHAIN_T"),
+        bounds: Vec::new(),
+        default: None,
+    });
+	let (_, ty_generics_ext1, _) = generics_ext1.split_for_impl();
+	let mut generics_ext2 = ast.generics.clone();
+	generics_ext2.ty_params.push(syn::TyParam {
+        attrs: Vec::new(),
+        ident: syn::Ident::from("DERIVE_ERROR_CHAIN_T"),
+        bounds: Vec::new(),
+        default: None,
+    });
+	generics_ext2.ty_params.push(syn::TyParam {
+        attrs: Vec::new(),
+        ident: syn::Ident::from("DERIVE_ERROR_CHAIN_E"),
+        bounds: vec![
+            syn::TyParamBound::Trait(syn::PolyTraitRef {
+                    bound_lifetimes: Vec::new(),
+                    trait_ref: syn::Path::from("::std::error::Error")
+                }, syn::TraitBoundModifier::None),
+            syn::TyParamBound::Trait(syn::PolyTraitRef {
+                    bound_lifetimes: Vec::new(),
+                    trait_ref: syn::Path::from("::std::marker::Send")
+                }, syn::TraitBoundModifier::None),
+            syn::TyParamBound::Region(syn::Lifetime::new("'static")),
+        ],
+        default: None,
+    });
+	let (impl_generics_ext2, ty_generics_ext2, _) = generics_ext2.split_for_impl();
+
+
 	let mut error_name = syn::parse_ident("Error").unwrap();
 	let mut result_ext_name = syn::parse_ident("ResultExt").unwrap();
 	let mut result_name = Some(syn::parse_ident("Result").unwrap());
@@ -523,7 +561,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				LinkType::Chainable(_, ref error_kind_ty) => {
 					let variant_name = &link.variant.ident;
 					Some(quote! {
-						impl From<#error_kind_ty> for #error_kind_name {
+						impl #impl_generics From<#error_kind_ty#ty_generics> for #error_kind_name #ty_generics #where_clause {
 							fn from(kind: #error_kind_ty) -> Self {
 								#error_kind_name::#variant_name(kind)
 							}
@@ -593,7 +631,7 @@ This struct is made of three things:
 				LinkType::Chainable(ref error_ty, _) => {
 					let variant_name = &link.variant.ident;
 					Some(quote! {
-						impl From<#error_ty> for #error_name {
+						impl #impl_generics From<#error_ty> for #error_name #ty_generics #where_clause {
 							fn from(err: #error_ty) -> Self {
 								#error_name(#error_kind_name::#variant_name(err.0), err.1)
 							}
@@ -604,7 +642,7 @@ This struct is made of three things:
 				LinkType::Foreign(ref ty) => {
 					let variant_name = &link.variant.ident;
 					Some(quote! {
-						impl From<#ty> for #error_name {
+						impl #impl_generics From<#ty> for #error_name #ty_generics #where_clause {
 							fn from(err: #ty) -> Self {
 								Self::from_kind(#error_kind_name::#variant_name(err))
 							}
@@ -640,14 +678,15 @@ This struct is made of three things:
 			", error_kind_name);
 
 			let result_wrapper = result_name.map(|result_name| quote! {
+			    #[allow(non_camel_case_types)]
 				/// Convenient wrapper around `::std::result::Result`
-				pub type #result_name<T> = ::std::result::Result<T, #error_name>;
+				pub type #result_name#ty_generics_ext1 = ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>;
 			});
 
 			quote! {
 				extern crate error_chain as #error_chain_name;
 
-				impl #error_kind_name {
+				impl #impl_generics #error_kind_name #ty_generics #where_clause {
 					/// A string describing the error kind.
 					pub fn description(&self) -> &str {
 						match *self {
@@ -658,7 +697,7 @@ This struct is made of three things:
 					}
 				}
 
-				impl ::std::fmt::Display for #error_kind_name {
+				impl #impl_generics ::std::fmt::Display for #error_kind_name #ty_generics #where_clause {
 					fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 						match *self {
 							#error_kind_name::Msg(ref s) => ::std::fmt::Display::fmt(s, f),
@@ -670,44 +709,44 @@ This struct is made of three things:
 
 				#(#error_kind_from_impls)*
 
-				impl <'a> From<&'a str> for #error_kind_name {
-					fn from(s: &'a str) -> Self { #error_kind_name::Msg(s.to_string()) }
+				impl #impl_generics_lifetime From<&'error_chain_lifetime str> for #error_kind_name #ty_generics #where_clause {
+					fn from(s: &'error_chain_lifetime str) -> Self { #error_kind_name::Msg(s.to_string()) }
 				}
 
-				impl From<String> for #error_kind_name {
+				impl #impl_generics From<String> for #error_kind_name #ty_generics #where_clause {
 					fn from(s: String) -> Self { #error_kind_name::Msg(s) }
 				}
 
-				impl From<#error_name> for #error_kind_name {
-					fn from(err: #error_name) -> Self { err.0 }
+				impl #impl_generics From<#error_name#ty_generics> for #error_kind_name #ty_generics #where_clause {
+					fn from(err: #error_name#ty_generics) -> Self { err.0 }
 				}
 
 				#[doc = #error_doc_comment]
 				#[derive(Debug)]
-				pub struct #error_name(
+				pub struct #error_name #impl_generics (
 					/// The kind of the error.
-					pub #error_kind_name,
+					pub #error_kind_name#ty_generics,
 
 					/// Contains the error chain and the backtrace.
 					pub #error_chain_name::State,
-				);
+				) #where_clause ;
 
 				#[allow(unused)]
-				impl #error_name {
+				impl #impl_generics #error_name #ty_generics #where_clause {
 					/// Constructs an error from a kind, and generates a backtrace.
-					pub fn from_kind(kind: #error_kind_name) -> #error_name {
+					pub fn from_kind(kind: #error_kind_name #ty_generics) -> #error_name #ty_generics {
 						#error_name(kind, #error_chain_name::State::default())
 					}
 
 					/// Constructs a chained error from another error and a kind, and generates a backtrace.
 					pub fn with_chain<E, K>(error: E, kind: K) -> Self
-						where E: ::std::error::Error + Send + 'static, K: Into<#error_kind_name> {
+						where E: ::std::error::Error + Send + 'static, K: Into<#error_kind_name #ty_generics> {
 
-						#error_name(kind.into(), #error_chain_name::State::new::<#error_name>(Box::new(error)))
+						#error_name(kind.into(), #error_chain_name::State::new::<#error_name #ty_generics>(Box::new(error)))
 					}
 
 					/// Returns the kind of the error.
-					pub fn kind(&self) -> &#error_kind_name { &self.0 }
+					pub fn kind(&self) -> &#error_kind_name #ty_generics { &self.0 }
 
 					/// Iterates over the error chain.
 					pub fn iter(&self) -> #error_chain_name::ErrorChainIter {
@@ -720,7 +759,7 @@ This struct is made of three things:
 					}
 				}
 
-				impl ::std::error::Error for #error_name {
+				impl #impl_generics ::std::error::Error for #error_name #ty_generics #where_clause {
 					fn description(&self) -> &str { self.0.description() }
 
 					fn cause(&self) -> Option<&::std::error::Error> {
@@ -735,7 +774,7 @@ This struct is made of three things:
 					}
 				}
 
-				impl ::std::fmt::Display for #error_name {
+				impl #impl_generics ::std::fmt::Display for #error_name #ty_generics #where_clause {
 					fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 						::std::fmt::Display::fmt(&self.0, f)
 					}
@@ -743,26 +782,26 @@ This struct is made of three things:
 
 				#(#error_from_impls)*
 
-				impl From<#error_kind_name> for #error_name {
-					fn from(kind: #error_kind_name) -> Self { Self::from_kind(kind) }
+				impl #impl_generics From<#error_kind_name#ty_generics> for #error_name #ty_generics #where_clause {
+					fn from(kind: #error_kind_name#ty_generics) -> Self { Self::from_kind(kind) }
 				}
 
-				impl <'a> From<&'a str> for #error_name {
-					fn from(s: &'a str) -> Self { Self::from_kind(s.into()) }
+				impl #impl_generics_lifetime From<&'error_chain_lifetime str> for #error_name #ty_generics #where_clause {
+					fn from(s: &'error_chain_lifetime str) -> Self { Self::from_kind(s.into()) }
 				}
 
-				impl From<String> for #error_name {
+				impl #impl_generics From<String> for #error_name #ty_generics #where_clause {
 					fn from(s: String) -> Self { Self::from_kind(s.into()) }
 				}
 
-				impl ::std::ops::Deref for #error_name {
-					type Target = #error_kind_name;
+				impl #impl_generics ::std::ops::Deref for #error_name #ty_generics #where_clause {
+					type Target = #error_kind_name#ty_generics;
 
 					fn deref(&self) -> &Self::Target { &self.0 }
 				}
 
-				impl #error_chain_name::ChainedError for #error_name {
-					type ErrorKind = #error_kind_name;
+				impl #impl_generics #error_chain_name::ChainedError for #error_name #ty_generics #where_clause {
+					type ErrorKind = #error_kind_name#ty_generics;
 
 					fn new(kind: Self::ErrorKind, state: #error_chain_name::State) -> Self {
 						#error_name(kind, state)
@@ -793,19 +832,20 @@ This struct is made of three things:
 					#extract_backtrace_fn
 				}
 
+                #[allow(non_camel_case_types)]
 				/// Additional methods for `Result`, for easy interaction with this crate.
-				pub trait #result_ext_name<T, E> {
+				pub trait #result_ext_name#impl_generics_ext2 #where_clause {
 					#[doc = #result_ext_chain_err_doc_comment]
-					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, #error_name>
-						where F: FnOnce() -> EK, EK: Into<#error_kind_name>;
+					fn chain_err<DERIVE_ERROR_CHAIN_F, DERIVE_ERROR_CHAIN_EK>(self, callback: DERIVE_ERROR_CHAIN_F) -> ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>
+						where DERIVE_ERROR_CHAIN_F: FnOnce() -> DERIVE_ERROR_CHAIN_EK, DERIVE_ERROR_CHAIN_EK: Into<#error_kind_name#ty_generics>;
 				}
 
-				impl<T, E> #result_ext_name<T, E> for ::std::result::Result<T, E>
-					where E: ::std::error::Error + Send + 'static {
-					fn chain_err<F, EK>(self, callback: F) -> ::std::result::Result<T, #error_name>
-						where F: FnOnce() -> EK, EK: Into<#error_kind_name> {
+                #[allow(non_camel_case_types)]
+				impl #impl_generics_ext2 #result_ext_name#ty_generics_ext2 for ::std::result::Result<DERIVE_ERROR_CHAIN_T, DERIVE_ERROR_CHAIN_E> #where_clause {
+					fn chain_err<DERIVE_ERROR_CHAIN_F, DERIVE_ERROR_CHAIN_EK>(self, callback: DERIVE_ERROR_CHAIN_F) -> ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>
+						where DERIVE_ERROR_CHAIN_F: FnOnce() -> DERIVE_ERROR_CHAIN_EK, DERIVE_ERROR_CHAIN_EK: Into<#error_kind_name#ty_generics> {
 						self.map_err(move |e| {
-							let state = #error_chain_name::State::new::<#error_name>(Box::new(e));
+							let state = #error_chain_name::State::new::<#error_name#ty_generics>(Box::new(e));
 							#error_chain_name::ChainedError::new(callback().into(), state)
 						})
 					}
