@@ -30,7 +30,9 @@ fn main() {
 	cause();
 	inlined_description_and_display_and_cause();
 }
+
 // Upstream tests
+
 fn smoke_test_1() {
 	#[derive(Debug, error_chain)]
 	#[error_chain(error = "Error", result_ext = "ResultExt", result = "Result")]

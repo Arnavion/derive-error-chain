@@ -678,7 +678,7 @@ This struct is made of three things:
 			", error_kind_name);
 
 			let result_wrapper = result_name.map(|result_name| quote! {
-			    #[allow(non_camel_case_types)]
+				#[allow(non_camel_case_types)]
 				/// Convenient wrapper around `::std::result::Result`
 				pub type #result_name#ty_generics_ext1 = ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>;
 			});
