@@ -268,16 +268,46 @@ mod attributes_test {
 }
 
 mod generics_test {
-	#[allow(unused_imports)]
     use std::error;
+    use std::fmt;
+
+	mod inner {
+	    use std::fmt;
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind<T: Send + fmt::Debug + 'static> {
+			Msg(String),
+
+			#[error_chain(custom)]
+			CustomGeneric(T)
+		}
+	}
 
 	#[derive(Debug, error_chain)]
-	pub enum ErrorKind<T: error::Error + Send + 'static> where T: Into<usize> {
+	pub enum ErrorKind<T: error::Error + Send + 'static, U>
+	    where U: Send + fmt::Debug + fmt::Display + 'static {
 		Msg(String),
 
 		#[error_chain(custom)]
-		#[error_chain(description = r#"|_| "could not locate working directory""#)]
-		Io(T),
+		#[error_chain(description = r#"|_| "custom generic error""#)]
+        #[error_chain(display = r#"|t| write!(f, "custom generic error: {}", t)"#)]
+		CustomGeneric(T),
+
+		#[error_chain(custom)]
+		#[error_chain(description = r#"|_| "custom generic boxed error""#)]
+        #[error_chain(display = r#"|t| write!(f, "custom generic boxed error: {}", t)"#)]
+		CustomGenericBoxed(Box<U>),
+
+        // FIXME: custom derive produced unparseable tokens
+		// #[error_chain(link = "inner::Error")]
+		// LinkGeneric(inner::Error<T>),
+
+        // FIXME: conflicting implementations of trait `std::convert::From<&str>` for type `generics_test::Error<&str, _>
+        // FIXME: conflicting implementations of trait `std::convert::From<std::string::String>` for type `generics_test::Error<std::string::String, _>
+        // #[error_chain(foreign)]
+        // ForeignGeneric(T),
+
+        #[error_chain(foreign)]
+        ForeignGenericBoxed(Box<T>),
 	}
 }
 

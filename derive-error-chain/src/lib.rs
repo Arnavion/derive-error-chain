@@ -562,7 +562,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					let variant_name = &link.variant.ident;
 					Some(quote! {
 						impl #impl_generics From<#error_kind_ty#ty_generics> for #error_kind_name #ty_generics #where_clause {
-							fn from(kind: #error_kind_ty) -> Self {
+							fn from(kind: #error_kind_ty#ty_generics) -> Self {
 								#error_kind_name::#variant_name(kind)
 							}
 						}
