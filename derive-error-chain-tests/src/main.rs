@@ -270,8 +270,7 @@ mod attributes_test {
 }
 
 mod generics_test {
-	use std::error;
-	use std::fmt;
+	use std::{error, fmt, io};
 
 	mod inner1 {
 		use std::fmt;
@@ -297,6 +296,11 @@ mod generics_test {
 		Msg(String),
 
 		#[error_chain(custom)]
+		#[error_chain(description = r#"|_| "custom error""#)]
+		#[error_chain(display = r#"|t| write!(f, "custom error: {}", t)"#)]
+		Custom(String),
+
+		#[error_chain(custom)]
 		#[error_chain(description = r#"|_| "custom generic error""#)]
 		#[error_chain(display = r#"|t| write!(f, "custom generic error: {}", t)"#)]
 		CustomGeneric(T),
@@ -319,6 +323,9 @@ mod generics_test {
 
 		#[error_chain(foreign)]
 		ForeignGenericBoxed(Box<T>),
+
+		#[error_chain(foreign)]
+		Foreign(io::Error),
 	}
 }
 
