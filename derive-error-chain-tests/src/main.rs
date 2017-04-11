@@ -297,9 +297,8 @@ mod generics_test {
         #[error_chain(display = r#"|t| write!(f, "custom generic boxed error: {}", t)"#)]
 		CustomGenericBoxed(Box<U>),
 
-        // FIXME: custom derive produced unparseable tokens
-		// #[error_chain(link = "inner::Error")]
-		// LinkGeneric(inner::Error<T>),
+		#[error_chain(link = "inner::Error<U>")]
+		LinkGeneric(inner::ErrorKind<U>),
 
         // FIXME: conflicting implementations of trait `std::convert::From<&str>` for type `generics_test::Error<&str, _>
         // FIXME: conflicting implementations of trait `std::convert::From<std::string::String>` for type `generics_test::Error<std::string::String, _>
