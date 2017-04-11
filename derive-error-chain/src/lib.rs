@@ -281,15 +281,9 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		attrs: Vec::new(),
 		ident: syn::Ident::from("DERIVE_ERROR_CHAIN_E"),
 		bounds: vec![
-			syn::TyParamBound::Trait(syn::PolyTraitRef {
-					bound_lifetimes: Vec::new(),
-					trait_ref: syn::Path::from("::std::error::Error")
-				}, syn::TraitBoundModifier::None),
-			syn::TyParamBound::Trait(syn::PolyTraitRef {
-					bound_lifetimes: Vec::new(),
-					trait_ref: syn::Path::from("::std::marker::Send")
-				}, syn::TraitBoundModifier::None),
-			syn::TyParamBound::Region(syn::Lifetime::new("'static")),
+			syn::parse_ty_param_bound("::std::error::Error").unwrap(),
+			syn::parse_ty_param_bound("::std::marker::Send").unwrap(),
+			syn::parse_ty_param_bound("'static").unwrap(),
 		],
 		default: None,
 	});
