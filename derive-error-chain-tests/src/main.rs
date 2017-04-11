@@ -273,7 +273,7 @@ mod generics_test {
 	use std::error;
 	use std::fmt;
 
-	mod inner {
+	mod inner1 {
 		use std::fmt;
 		#[derive(Debug, error_chain)]
 		pub enum ErrorKind<T: Send + fmt::Debug + 'static> {
@@ -281,6 +281,13 @@ mod generics_test {
 
 			#[error_chain(custom)]
 			CustomGeneric(T)
+		}
+	}
+
+	mod inner2 {
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind {
+			Msg(String),
 		}
 	}
 
@@ -299,8 +306,11 @@ mod generics_test {
 		#[error_chain(display = r#"|t| write!(f, "custom generic boxed error: {}", t)"#)]
 		CustomGenericBoxed(Box<U>),
 
-		#[error_chain(link = "inner::Error<U>")]
-		LinkGeneric(inner::ErrorKind<U>),
+		#[error_chain(link = "inner1::Error<U>")]
+		LinkGeneric(inner1::ErrorKind<U>),
+
+		#[error_chain(link = "inner2::Error")]
+		Link(inner2::ErrorKind),
 
 		// FIXME: conflicting implementations of trait `std::convert::From<&str>` for type `generics_test::Error<&str, _>
 		// FIXME: conflicting implementations of trait `std::convert::From<std::string::String>` for type `generics_test::Error<std::string::String, _>
