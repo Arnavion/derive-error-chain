@@ -289,7 +289,6 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	});
 	let (impl_generics_ext2, ty_generics_ext2, _) = generics_ext2.split_for_impl();
 
-
 	let mut error_name = syn::parse_ident("Error").unwrap();
 	let mut result_ext_name = syn::parse_ident("ResultExt").unwrap();
 	let mut result_name = Some(syn::parse_ident("Result").unwrap());
