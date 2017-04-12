@@ -269,66 +269,6 @@ mod attributes_test {
 	}
 }
 
-mod generics_test {
-	use std::{error, fmt, io};
-
-	mod inner1 {
-		use std::fmt;
-		#[derive(Debug, error_chain)]
-		pub enum ErrorKind<T: Send + fmt::Debug + 'static> {
-			Msg(String),
-
-			#[error_chain(custom)]
-			CustomGeneric(T)
-		}
-	}
-
-	mod inner2 {
-		#[derive(Debug, error_chain)]
-		pub enum ErrorKind {
-			Msg(String),
-		}
-	}
-
-	#[derive(Debug, error_chain)]
-	pub enum ErrorKind<T: error::Error + Send + 'static, U>
-		where U: Send + fmt::Debug + fmt::Display + 'static {
-		Msg(String),
-
-		#[error_chain(custom)]
-		#[error_chain(description = r#"|_| "custom error""#)]
-		#[error_chain(display = r#"|t| write!(f, "custom error: {}", t)"#)]
-		Custom(String),
-
-		#[error_chain(custom)]
-		#[error_chain(description = r#"|_| "custom generic error""#)]
-		#[error_chain(display = r#"|t| write!(f, "custom generic error: {}", t)"#)]
-		CustomGeneric(T),
-
-		#[error_chain(custom)]
-		#[error_chain(description = r#"|_| "custom generic boxed error""#)]
-		#[error_chain(display = r#"|t| write!(f, "custom generic boxed error: {}", t)"#)]
-		CustomGenericBoxed(Box<U>),
-
-		#[error_chain(link = "inner1::Error<U>")]
-		LinkGeneric(inner1::ErrorKind<U>),
-
-		#[error_chain(link = "inner2::Error")]
-		Link(inner2::ErrorKind),
-
-		// FIXME: conflicting implementations of trait `std::convert::From<&str>` for type `generics_test::Error<&str, _>
-		// FIXME: conflicting implementations of trait `std::convert::From<std::string::String>` for type `generics_test::Error<std::string::String, _>
-		// #[error_chain(foreign)]
-		// ForeignGeneric(T),
-
-		#[error_chain(foreign)]
-		ForeignGenericBoxed(Box<T>),
-
-		#[error_chain(foreign)]
-		Foreign(io::Error),
-	}
-}
-
 fn with_result() {
 	#[derive(Debug, error_chain)]
 	pub enum ErrorKind {
@@ -522,4 +462,64 @@ fn inlined_description_and_display_and_cause() {
 
 	let err: Error = ErrorKind::FileIO(::std::path::PathBuf::new(), ::std::io::Error::from_raw_os_error(1)).into();
 	assert!(::std::error::Error::cause(&err).is_some());
+}
+
+mod generics_test {
+	use std::{error, fmt, io};
+
+	mod inner1 {
+		use std::fmt;
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind<T: Send + fmt::Debug + 'static> {
+			Msg(String),
+
+			#[error_chain(custom)]
+			CustomGeneric(T)
+		}
+	}
+
+	mod inner2 {
+		#[derive(Debug, error_chain)]
+		pub enum ErrorKind {
+			Msg(String),
+		}
+	}
+
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind<T: error::Error + Send + 'static, U>
+		where U: Send + fmt::Debug + fmt::Display + 'static {
+		Msg(String),
+
+		#[error_chain(custom)]
+		#[error_chain(description = r#"|_| "custom error""#)]
+		#[error_chain(display = r#"|t| write!(f, "custom error: {}", t)"#)]
+		Custom(String),
+
+		#[error_chain(custom)]
+		#[error_chain(description = r#"|_| "custom generic error""#)]
+		#[error_chain(display = r#"|t| write!(f, "custom generic error: {}", t)"#)]
+		CustomGeneric(T),
+
+		#[error_chain(custom)]
+		#[error_chain(description = r#"|_| "custom generic boxed error""#)]
+		#[error_chain(display = r#"|t| write!(f, "custom generic boxed error: {}", t)"#)]
+		CustomGenericBoxed(Box<U>),
+
+		#[error_chain(link = "inner1::Error<U>")]
+		LinkGeneric(inner1::ErrorKind<U>),
+
+		#[error_chain(link = "inner2::Error")]
+		Link(inner2::ErrorKind),
+
+		// FIXME: conflicting implementations of trait `std::convert::From<&str>` for type `generics_test::Error<&str, _>
+		// FIXME: conflicting implementations of trait `std::convert::From<std::string::String>` for type `generics_test::Error<std::string::String, _>
+		// #[error_chain(foreign)]
+		// ForeignGeneric(T),
+
+		#[error_chain(foreign)]
+		ForeignGenericBoxed(Box<T>),
+
+		#[error_chain(foreign)]
+		Foreign(io::Error),
+	}
 }
