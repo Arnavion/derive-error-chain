@@ -673,7 +673,7 @@ This struct is made of three things:
 			let result_wrapper = result_name.map(|result_name| quote! {
 				#[allow(non_camel_case_types)]
 				/// Convenient wrapper around `::std::result::Result`
-				pub type #result_name#result_ty_generics = ::std::result::Result<__T, #error_name#ty_generics>;
+				pub type #result_name #result_ty_generics = ::std::result::Result<__T, #error_name #ty_generics>;
 			});
 
 			quote! {
@@ -710,15 +710,15 @@ This struct is made of three things:
 					fn from(s: String) -> Self { #error_kind_name::Msg(s) }
 				}
 
-				impl #impl_generics From<#error_name#ty_generics> for #error_kind_name #ty_generics #where_clause {
-					fn from(err: #error_name#ty_generics) -> Self { err.0 }
+				impl #impl_generics From<#error_name #ty_generics> for #error_kind_name #ty_generics #where_clause {
+					fn from(err: #error_name #ty_generics) -> Self { err.0 }
 				}
 
 				#[doc = #error_doc_comment]
 				#[derive(Debug)]
 				pub struct #error_name #impl_generics (
 					/// The kind of the error.
-					pub #error_kind_name#ty_generics,
+					pub #error_kind_name #ty_generics,
 
 					/// Contains the error chain and the backtrace.
 					pub #error_chain_name::State,
@@ -775,8 +775,8 @@ This struct is made of three things:
 
 				#(#error_from_impls)*
 
-				impl #impl_generics From<#error_kind_name#ty_generics> for #error_name #ty_generics #where_clause {
-					fn from(kind: #error_kind_name#ty_generics) -> Self { Self::from_kind(kind) }
+				impl #impl_generics From<#error_kind_name #ty_generics> for #error_name #ty_generics #where_clause {
+					fn from(kind: #error_kind_name #ty_generics) -> Self { Self::from_kind(kind) }
 				}
 
 				impl #impl_generics_lifetime From<&'__a str> for #error_name #ty_generics #where_clause {
@@ -788,13 +788,13 @@ This struct is made of three things:
 				}
 
 				impl #impl_generics ::std::ops::Deref for #error_name #ty_generics #where_clause {
-					type Target = #error_kind_name#ty_generics;
+					type Target = #error_kind_name #ty_generics;
 
 					fn deref(&self) -> &Self::Target { &self.0 }
 				}
 
 				impl #impl_generics #error_chain_name::ChainedError for #error_name #ty_generics #where_clause {
-					type ErrorKind = #error_kind_name#ty_generics;
+					type ErrorKind = #error_kind_name #ty_generics;
 
 					fn new(kind: Self::ErrorKind, state: #error_chain_name::State) -> Self {
 						#error_name(kind, state)
@@ -826,17 +826,17 @@ This struct is made of three things:
 				}
 
 				/// Additional methods for `Result`, for easy interaction with this crate.
-				pub trait #result_ext_name#result_ext_impl_generics #where_clause {
+				pub trait #result_ext_name #result_ext_impl_generics #where_clause {
 					#[doc = #result_ext_chain_err_doc_comment]
-					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name#ty_generics>
-						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name#ty_generics>;
+					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name #ty_generics>
+						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name #ty_generics>;
 				}
 
-				impl #result_ext_impl_generics #result_ext_name#result_ext_ty_generics for ::std::result::Result<__T, __E> #where_clause {
-					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name#ty_generics>
-						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name#ty_generics> {
+				impl #result_ext_impl_generics #result_ext_name #result_ext_ty_generics for ::std::result::Result<__T, __E> #where_clause {
+					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name #ty_generics>
+						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name #ty_generics> {
 						self.map_err(move |e| {
-							let state = #error_chain_name::State::new::<#error_name#ty_generics>(Box::new(e));
+							let state = #error_chain_name::State::new::<#error_name #ty_generics>(Box::new(e));
 							#error_chain_name::ChainedError::new(callback().into(), state)
 						})
 					}
