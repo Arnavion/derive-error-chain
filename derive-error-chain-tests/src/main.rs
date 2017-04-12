@@ -511,8 +511,11 @@ mod generics_test {
 		#[error_chain(link = "inner2::Error")]
 		Link(inner2::ErrorKind),
 
-		// FIXME: conflicting implementations of trait `std::convert::From<&str>` for type `generics_test::Error<&str, _>
-		// FIXME: conflicting implementations of trait `std::convert::From<std::string::String>` for type `generics_test::Error<std::string::String, _>
+		// FIXME: conflicting implementations of trait `std::convert::From<generics_test::inner1::Error<_>>` for type `generics_test::Error<generics_test::inner1::Error<_>, _>`
+		// FIXME: conflicting implementations of trait `std::convert::From<generics_test::inner2::Error>` for type `generics_test::Error<generics_test::inner2::Error, _>`
+		// FIXME: conflicting implementations of trait `std::convert::From<std::io::Error>` for type `generics_test::Error<std::io::Error, _>`
+		// FIXME: conflicting implementations of trait `std::convert::From<&str>` for type `generics_test::Error<&str, _>`
+		// FIXME: conflicting implementations of trait `std::convert::From<std::string::String>` for type `generics_test::Error<std::string::String, _>`
 		// #[error_chain(foreign)]
 		// ForeignGeneric(T),
 
