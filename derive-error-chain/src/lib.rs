@@ -260,12 +260,12 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 	let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 	let mut generics_lifetime = ast.generics.clone();
-	generics_lifetime.lifetimes.push(syn::LifetimeDef::new("'error_chain_lifetime"));
+	generics_lifetime.lifetimes.push(syn::LifetimeDef::new("'__a"));
 	let (impl_generics_lifetime, _, _) = generics_lifetime.split_for_impl();
 	let mut result_generics = ast.generics.clone();
 	result_generics.ty_params.push(syn::TyParam {
 		attrs: Vec::new(),
-		ident: syn::Ident::from("DERIVE_ERROR_CHAIN_T"),
+		ident: syn::Ident::from("__T"),
 		bounds: Vec::new(),
 		default: None,
 	});
@@ -273,13 +273,13 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut result_ext_generics = ast.generics.clone();
 	result_ext_generics.ty_params.push(syn::TyParam {
 		attrs: Vec::new(),
-		ident: syn::Ident::from("DERIVE_ERROR_CHAIN_T"),
+		ident: syn::Ident::from("__T"),
 		bounds: Vec::new(),
 		default: None,
 	});
 	result_ext_generics.ty_params.push(syn::TyParam {
 		attrs: Vec::new(),
-		ident: syn::Ident::from("DERIVE_ERROR_CHAIN_E"),
+		ident: syn::Ident::from("__E"),
 		bounds: vec![
 			syn::parse_ty_param_bound("::std::error::Error").unwrap(),
 			syn::parse_ty_param_bound("::std::marker::Send").unwrap(),
@@ -673,7 +673,7 @@ This struct is made of three things:
 			let result_wrapper = result_name.map(|result_name| quote! {
 				#[allow(non_camel_case_types)]
 				/// Convenient wrapper around `::std::result::Result`
-				pub type #result_name#result_ty_generics = ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>;
+				pub type #result_name#result_ty_generics = ::std::result::Result<__T, #error_name#ty_generics>;
 			});
 
 			quote! {
@@ -702,8 +702,8 @@ This struct is made of three things:
 
 				#(#error_kind_from_impls)*
 
-				impl #impl_generics_lifetime From<&'error_chain_lifetime str> for #error_kind_name #ty_generics #where_clause {
-					fn from(s: &'error_chain_lifetime str) -> Self { #error_kind_name::Msg(s.to_string()) }
+				impl #impl_generics_lifetime From<&'__a str> for #error_kind_name #ty_generics #where_clause {
+					fn from(s: &'__a str) -> Self { #error_kind_name::Msg(s.to_string()) }
 				}
 
 				impl #impl_generics From<String> for #error_kind_name #ty_generics #where_clause {
@@ -732,8 +732,8 @@ This struct is made of three things:
 					}
 
 					/// Constructs a chained error from another error and a kind, and generates a backtrace.
-					pub fn with_chain<E, K>(error: E, kind: K) -> Self
-						where E: ::std::error::Error + Send + 'static, K: Into<#error_kind_name #ty_generics> {
+					pub fn with_chain<__E, __K>(error: __E, kind: __K) -> Self
+						where __E: ::std::error::Error + Send + 'static, __K: Into<#error_kind_name #ty_generics> {
 
 						#error_name(kind.into(), #error_chain_name::State::new::<#error_name #ty_generics>(Box::new(error)))
 					}
@@ -779,8 +779,8 @@ This struct is made of three things:
 					fn from(kind: #error_kind_name#ty_generics) -> Self { Self::from_kind(kind) }
 				}
 
-				impl #impl_generics_lifetime From<&'error_chain_lifetime str> for #error_name #ty_generics #where_clause {
-					fn from(s: &'error_chain_lifetime str) -> Self { Self::from_kind(s.into()) }
+				impl #impl_generics_lifetime From<&'__a str> for #error_name #ty_generics #where_clause {
+					fn from(s: &'__a str) -> Self { Self::from_kind(s.into()) }
 				}
 
 				impl #impl_generics From<String> for #error_name #ty_generics #where_clause {
@@ -804,8 +804,8 @@ This struct is made of three things:
 						Self::from_kind(kind)
 					}
 
-					fn with_chain<E, K>(error: E, kind: K) -> Self
-						where E: ::std::error::Error + Send + 'static, K: Into<Self::ErrorKind> {
+					fn with_chain<__E, __K>(error: __E, kind: __K) -> Self
+						where __E: ::std::error::Error + Send + 'static, __K: Into<Self::ErrorKind> {
 
 						Self::with_chain(error, kind)
 					}
@@ -825,18 +825,16 @@ This struct is made of three things:
 					#extract_backtrace_fn
 				}
 
-				#[allow(non_camel_case_types)]
 				/// Additional methods for `Result`, for easy interaction with this crate.
 				pub trait #result_ext_name#result_ext_impl_generics #where_clause {
 					#[doc = #result_ext_chain_err_doc_comment]
-					fn chain_err<DERIVE_ERROR_CHAIN_F, DERIVE_ERROR_CHAIN_EK>(self, callback: DERIVE_ERROR_CHAIN_F) -> ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>
-						where DERIVE_ERROR_CHAIN_F: FnOnce() -> DERIVE_ERROR_CHAIN_EK, DERIVE_ERROR_CHAIN_EK: Into<#error_kind_name#ty_generics>;
+					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name#ty_generics>
+						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name#ty_generics>;
 				}
 
-				#[allow(non_camel_case_types)]
-				impl #result_ext_impl_generics #result_ext_name#result_ext_ty_generics for ::std::result::Result<DERIVE_ERROR_CHAIN_T, DERIVE_ERROR_CHAIN_E> #where_clause {
-					fn chain_err<DERIVE_ERROR_CHAIN_F, DERIVE_ERROR_CHAIN_EK>(self, callback: DERIVE_ERROR_CHAIN_F) -> ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>
-						where DERIVE_ERROR_CHAIN_F: FnOnce() -> DERIVE_ERROR_CHAIN_EK, DERIVE_ERROR_CHAIN_EK: Into<#error_kind_name#ty_generics> {
+				impl #result_ext_impl_generics #result_ext_name#result_ext_ty_generics for ::std::result::Result<__T, __E> #where_clause {
+					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name#ty_generics>
+						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name#ty_generics> {
 						self.map_err(move |e| {
 							let state = #error_chain_name::State::new::<#error_name#ty_generics>(Box::new(e));
 							#error_chain_name::ChainedError::new(callback().into(), state)
