@@ -262,22 +262,22 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut generics_lifetime = ast.generics.clone();
 	generics_lifetime.lifetimes.push(syn::LifetimeDef::new("'error_chain_lifetime"));
 	let (impl_generics_lifetime, _, _) = generics_lifetime.split_for_impl();
-	let mut generics_ext1 = ast.generics.clone();
-	generics_ext1.ty_params.push(syn::TyParam {
+	let mut result_generics = ast.generics.clone();
+	result_generics.ty_params.push(syn::TyParam {
 		attrs: Vec::new(),
 		ident: syn::Ident::from("DERIVE_ERROR_CHAIN_T"),
 		bounds: Vec::new(),
 		default: None,
 	});
-	let (_, ty_generics_ext1, _) = generics_ext1.split_for_impl();
-	let mut generics_ext2 = ast.generics.clone();
-	generics_ext2.ty_params.push(syn::TyParam {
+	let (_, result_ty_generics, _) = result_generics.split_for_impl();
+	let mut result_ext_generics = ast.generics.clone();
+	result_ext_generics.ty_params.push(syn::TyParam {
 		attrs: Vec::new(),
 		ident: syn::Ident::from("DERIVE_ERROR_CHAIN_T"),
 		bounds: Vec::new(),
 		default: None,
 	});
-	generics_ext2.ty_params.push(syn::TyParam {
+	result_ext_generics.ty_params.push(syn::TyParam {
 		attrs: Vec::new(),
 		ident: syn::Ident::from("DERIVE_ERROR_CHAIN_E"),
 		bounds: vec![
@@ -287,7 +287,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		],
 		default: None,
 	});
-	let (impl_generics_ext2, ty_generics_ext2, _) = generics_ext2.split_for_impl();
+	let (result_ext_impl_generics, result_ext_ty_generics, _) = result_ext_generics.split_for_impl();
 
 	let mut error_name = syn::parse_ident("Error").unwrap();
 	let mut result_ext_name = syn::parse_ident("ResultExt").unwrap();
@@ -673,7 +673,7 @@ This struct is made of three things:
 			let result_wrapper = result_name.map(|result_name| quote! {
 				#[allow(non_camel_case_types)]
 				/// Convenient wrapper around `::std::result::Result`
-				pub type #result_name#ty_generics_ext1 = ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>;
+				pub type #result_name#result_ty_generics = ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>;
 			});
 
 			quote! {
@@ -827,14 +827,14 @@ This struct is made of three things:
 
 				#[allow(non_camel_case_types)]
 				/// Additional methods for `Result`, for easy interaction with this crate.
-				pub trait #result_ext_name#impl_generics_ext2 #where_clause {
+				pub trait #result_ext_name#result_ext_impl_generics #where_clause {
 					#[doc = #result_ext_chain_err_doc_comment]
 					fn chain_err<DERIVE_ERROR_CHAIN_F, DERIVE_ERROR_CHAIN_EK>(self, callback: DERIVE_ERROR_CHAIN_F) -> ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>
 						where DERIVE_ERROR_CHAIN_F: FnOnce() -> DERIVE_ERROR_CHAIN_EK, DERIVE_ERROR_CHAIN_EK: Into<#error_kind_name#ty_generics>;
 				}
 
 				#[allow(non_camel_case_types)]
-				impl #impl_generics_ext2 #result_ext_name#ty_generics_ext2 for ::std::result::Result<DERIVE_ERROR_CHAIN_T, DERIVE_ERROR_CHAIN_E> #where_clause {
+				impl #result_ext_impl_generics #result_ext_name#result_ext_ty_generics for ::std::result::Result<DERIVE_ERROR_CHAIN_T, DERIVE_ERROR_CHAIN_E> #where_clause {
 					fn chain_err<DERIVE_ERROR_CHAIN_F, DERIVE_ERROR_CHAIN_EK>(self, callback: DERIVE_ERROR_CHAIN_F) -> ::std::result::Result<DERIVE_ERROR_CHAIN_T, #error_name#ty_generics>
 						where DERIVE_ERROR_CHAIN_F: FnOnce() -> DERIVE_ERROR_CHAIN_EK, DERIVE_ERROR_CHAIN_EK: Into<#error_kind_name#ty_generics> {
 						self.map_err(move |e| {
