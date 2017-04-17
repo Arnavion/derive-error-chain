@@ -264,21 +264,21 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let (impl_generics_lifetime, _, _) = generics_lifetime.split_for_impl();
 	let mut result_generics = ast.generics.clone();
 	result_generics.ty_params.push(syn::TyParam {
-		attrs: Vec::new(),
+		attrs: vec![],
 		ident: syn::Ident::from("__T"),
-		bounds: Vec::new(),
+		bounds: vec![],
 		default: None,
 	});
 	let (_, result_ty_generics, _) = result_generics.split_for_impl();
 	let mut result_ext_generics = ast.generics.clone();
 	result_ext_generics.ty_params.push(syn::TyParam {
-		attrs: Vec::new(),
+		attrs: vec![],
 		ident: syn::Ident::from("__T"),
-		bounds: Vec::new(),
+		bounds: vec![],
 		default: None,
 	});
 	result_ext_generics.ty_params.push(syn::TyParam {
-		attrs: Vec::new(),
+		attrs: vec![],
 		ident: syn::Ident::from("__E"),
 		bounds: vec![
 			syn::parse_ty_param_bound("::std::error::Error").unwrap(),
@@ -671,7 +671,6 @@ This struct is made of three things:
 			", error_kind_name);
 
 			let result_wrapper = result_name.map(|result_name| quote! {
-				#[allow(non_camel_case_types)]
 				/// Convenient wrapper around `::std::result::Result`
 				pub type #result_name #result_ty_generics = ::std::result::Result<__T, #error_name #ty_generics>;
 			});
