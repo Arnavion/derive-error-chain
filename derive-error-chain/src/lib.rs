@@ -642,10 +642,8 @@ This struct is made of three things:
 				LinkType::Foreign(ref ty) => {
 					match ty {
 						&syn::Ty::Path(_, ref path) => {
-							if !path.global {
-								if generics.contains(&path.segments[0].ident) {
-									return None;
-								}
+							if !path.global && generics.contains(&path.segments[0].ident) {
+								return None;
 							}
 						},
 						_ => ()
