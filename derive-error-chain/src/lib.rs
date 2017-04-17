@@ -252,6 +252,8 @@ extern crate proc_macro;
 extern crate quote;
 extern crate syn;
 
+use std::collections::HashSet;
+
 #[proc_macro_derive(error_chain, attributes(error_chain))]
 pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let source = input.to_string();
@@ -288,6 +290,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		default: None,
 	});
 	let (result_ext_impl_generics, result_ext_ty_generics, _) = result_ext_generics.split_for_impl();
+
+	let mut generics = HashSet::new();
+	for ty_param in &ast.generics.ty_params {
+		generics.insert(ty_param.ident.clone());
+	}
 
 	let mut error_name = syn::parse_ident("Error").unwrap();
 	let mut result_ext_name = syn::parse_ident("ResultExt").unwrap();
@@ -633,6 +640,16 @@ This struct is made of three things:
 				},
 
 				LinkType::Foreign(ref ty) => {
+					match ty {
+						&syn::Ty::Path(_, ref path) => {
+							if !path.global {
+								if generics.contains(&path.segments[0].ident) {
+									return None;
+								}
+							}
+						},
+						_ => ()
+					}
 					let variant_name = &link.variant.ident;
 					Some(quote! {
 						impl #impl_generics From<#ty> for #error_name #ty_generics #where_clause {
