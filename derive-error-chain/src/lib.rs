@@ -298,8 +298,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut support_backtrace = true;
 
 	for attr in ast.attrs {
-		match &attr.value {
-			&syn::MetaItem::List(ref ident, ref nested_meta_items) if ident == "error_chain" => {
+		match attr.value {
+			syn::MetaItem::List(ref ident, ref nested_meta_items) if ident == "error_chain" => {
 				for nested_meta_item in nested_meta_items {
 					match *nested_meta_item {
 						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
@@ -372,8 +372,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 								match *nested_meta_item {
 									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) => {
 										if ident == "foreign" {
-											match &variant.data {
-												&syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
+											match variant.data {
+												syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
 													link_type = Some(LinkType::Foreign(fields[0].ty.clone())),
 
 												_ => panic!("Foreign link {} must be a tuple of one element (the foreign error type).", variant.ident),
@@ -386,8 +386,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 									syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
 										if ident == "link" {
-											match &variant.data {
-												&syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
+											match variant.data {
+												syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
 													link_type = Some(LinkType::Chainable(
 														syn::parse_type(value).unwrap_or_else(|err| {
 															let variant_name = &variant.ident;
