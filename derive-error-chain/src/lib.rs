@@ -10,8 +10,10 @@
 //!     error_chain! {}
 //! }
 //!
-//! error_chain {
-//!     types { Error, ErrorKind, ResultExt, Result; }
+//! error_chain! {
+//!     types {
+//!         Error, ErrorKind, ResultExt, Result;
+//!     }
 //!
 //!     links {
 //!         Another(other_error::Error, other_error::ErrorKind) #[cfg(unix)];
