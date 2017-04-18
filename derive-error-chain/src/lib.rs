@@ -81,10 +81,6 @@
 //! - Doc comments, since they're effectively attributes, can be applied on the enum variants without any special syntax like `error_chain!` has.
 //! - The ErrorKind can be generic.
 //!
-//! Also, note that Rust will misleadingly complain about using custom derives if you have `#[macro_use] extern crate derive_error_chain;`
-//! before `#[macro_use] extern crate error_chain;`. Instead, you will need to put the extern for `derive_error_chain` *after* the extern for `error_chain`.
-//! This is tracked in https://github.com/rust-lang/rust/issues/39326 to atleast get a less-misleading error.
-//!
 //! # Enum attributes
 //!
 //! - `#[error_chain(error = "ErrorName")]`
@@ -249,6 +245,49 @@
 //!     - Chainable links: Returns `None`
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::cause()`
 //!     - Custom links: Returns `None`
+//!
+//! # Notes
+//!
+//! If you want to use other macros from the `error_chain` like `bail!`, note that the following code:
+//!
+//! ```ignore
+//! #[macro_use] extern crate derive_error_chain;
+//! #[macro_use] extern crate error_chain;
+//!
+//! #[derive(Debug, error_chain)]
+//! enum ErrorKind {
+//!     Msg(String),
+//! }
+//! ```
+//!
+//! will fail to compile with:
+//!
+//! ```ignore
+//! error: macro `error_chain` may not be used for derive attributes
+//! ```
+//!
+//! This is because both crates export a macro named `error_chain` and the macro from the second crate overrides the first.
+//!
+//! To fix this, import `error_chain` before `derive_error_chain`:
+//!
+//! ```ignore
+//! #[macro_use] extern crate error_chain;
+//! #[macro_use] extern crate derive_error_chain;
+//! ```
+//!
+//! or use a fully-qualified path for the custom derive (nightly only):
+//!
+//! ```ignore
+//! #![feature(proc_macro)]
+//!
+//! extern crate derive_error_chain;
+//! #[macro_use] extern crate error_chain;
+//!
+//! #[derive(Debug, derive_error_chain::error_chain)]
+//! enum ErrorKind {
+//!     Msg(String),
+//! }
+//! ```
 
 extern crate proc_macro;
 #[macro_use]
