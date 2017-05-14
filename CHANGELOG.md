@@ -1,3 +1,7 @@
+# v0.10.1
+
+- Added support for generic errorkinds.
+
 # v0.10.0 (2017-02-25)
 
 - Fixed `ResultExt` to use the correct names for the error kind and error structs instead of `ErrorKind` and `Error`.
