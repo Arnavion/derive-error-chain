@@ -2,6 +2,7 @@
 name = "derive-error-chain-tests"
 version = "0.1.0"
 authors = ["Arnavion <arnavion@gmail.com>"]
+publish = false
 
 [dependencies]
 error-chain = "0.10.x"

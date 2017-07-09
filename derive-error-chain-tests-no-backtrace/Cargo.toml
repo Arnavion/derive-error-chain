@@ -1,7 +1,8 @@
 [package]
-name = "derive-error-chain-tests"
+name = "derive-error-chain-tests-no-backtrace"
 version = "0.1.0"
 authors = ["Arnavion <arnavion@gmail.com>"]
+publish = false
 
 [dependencies]
 error-chain = { version = "0.10.x", default-features = false }
