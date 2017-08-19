@@ -77,7 +77,8 @@
 //!
 //! - The ErrorKind must explicitly implement `::std::fmt::Debug`, either automatically using `#[derive]` or manually implemented separately. `error_chain!` does this implicitly.
 //! - The ErrorKind must have `pub` visibility. `error_chain!` does this implicitly.
-//! - The ErrorKind must have a special `Msg(String)` member. `error_chain!` does this implicitly.
+//! - The ErrorKind can have a special `Msg(String)` member for converting strings to the ErrorKind. `error_chain!` does this implicitly.
+//! - Unlike `error-chain`, the `Msg(String)` member is optional. If absent, the ErrorKind and Error will not impl `From<String>` and `From<&str>`.
 //! - Doc comments, since they're effectively attributes, can be applied on the enum variants without any special syntax like `error_chain!` has.
 //! - The ErrorKind can be generic.
 //!
@@ -256,7 +257,6 @@
 //!
 //! #[derive(Debug, error_chain)]
 //! enum ErrorKind {
-//!     Msg(String),
 //! }
 //! ```
 //!
@@ -285,7 +285,6 @@
 //!
 //! #[derive(Debug, derive_error_chain::error_chain)]
 //! enum ErrorKind {
-//!     Msg(String),
 //! }
 //! ```
 
@@ -337,6 +336,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut result_ext_name = syn::parse_ident("ResultExt").unwrap();
 	let mut result_name = Some(syn::parse_ident("Result").unwrap());
 	let mut support_backtrace = true;
+	let mut has_msg = false;
 
 	for attr in ast.attrs {
 		match attr.value {
@@ -398,6 +398,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 			for variant in variants {
 				if &variant.ident == "Msg" {
+					has_msg = true;
 					continue;
 				}
 
@@ -472,143 +473,161 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				});
 			}
 
-			let error_kind_description_cases = links.iter().map(|link| {
-				let variant_name = &link.variant.ident;
-
-				match (link.custom_description.as_ref(), &link.link_type) {
-					(Some(custom_description), &LinkType::Chainable(_, _)) |
-					(Some(custom_description), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
-						#error_kind_name::#variant_name(ref err) => {
-							#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-							let result = (#custom_description)(err);
-							result
-						},
-					},
-
-					(Some(custom_description), &LinkType::Chainable(_, _)) |
-					(Some(custom_description), &LinkType::Foreign(_)) => quote! {
-						#error_kind_name::#variant_name(ref err) => #custom_description(err),
-					},
-
-					(Some(custom_description), &LinkType::Custom) => {
-						let pattern = fields_pattern(&link.variant);
-						let args = args(&link.variant);
-
-						if is_closure(custom_description) {
-							quote! {
-								#error_kind_name::#variant_name #pattern => {
-									#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-									let result = (#custom_description)(#args);
-									result
-								},
-							}
-						}
-						else {
-							quote! {
-								#error_kind_name::#variant_name #pattern => #custom_description(#args),
-							}
-						}
-					},
-
-					(None, &LinkType::Chainable(_, _)) => quote! {
-						#error_kind_name::#variant_name(ref kind) => kind.description(),
-					},
-
-					(None, &LinkType::Foreign(_)) => quote! {
-						#error_kind_name::#variant_name(ref err) => ::std::error::Error::description(err),
-					},
-
-					(None, &LinkType::Custom) => {
-						let pattern = fields_pattern_ignore(&link.variant);
-
-						quote! {
-							#error_kind_name::#variant_name #pattern => stringify!(#variant_name),
-						}
-					},
-				}
-			});
-
-			let error_kind_display_cases = links.iter().map(|link| {
-				let variant_name = &link.variant.ident;
-
-				match (link.custom_display.as_ref(), &link.link_type) {
-					(Some(custom_display), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
-						#error_kind_name::#variant_name(ref kind) => {
-							#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-							let result = (#custom_display)(kind);
-							result
-						},
-					},
-
-					(Some(custom_display), &LinkType::Chainable(_, _)) => quote! {
-						#error_kind_name::#variant_name(ref kind) => #custom_display(f, kind),
-					},
-
-					(Some(custom_display), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
-						#error_kind_name::#variant_name(ref err) => {
-							#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-							let result = (#custom_display)(err);
-							result
-						},
-					},
-
-					(Some(custom_display), &LinkType::Foreign(_)) => quote! {
-						#error_kind_name::#variant_name(ref err) => #custom_display(f, err),
-					},
-
-					(Some(custom_display), &LinkType::Custom) => {
-						let pattern = fields_pattern(&link.variant);
-						let args = args(&link.variant);
-
-						if is_closure(custom_display) {
-							quote! {
-								#error_kind_name::#variant_name #pattern => {
-									#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-									let result = (#custom_display)(#args);
-									result
-								},
-							}
-						}
-						else {
-							quote! {
-								#error_kind_name::#variant_name #pattern => #custom_display(f, #args),
-							}
-						}
-					},
-
-					(None, &LinkType::Chainable(_, _)) => quote! {
-						#error_kind_name::#variant_name(ref kind) => ::std::fmt::Display::fmt(kind, f),
-					},
-
-					(None, &LinkType::Foreign(_)) => quote! {
-						#error_kind_name::#variant_name(ref err) => ::std::fmt::Display::fmt(err, f),
-					},
-
-					(None, &LinkType::Custom) => {
-						let pattern = fields_pattern_ignore(&link.variant);
-
-						quote! {
-							#error_kind_name::#variant_name #pattern => ::std::fmt::Display::fmt(self.description(), f),
-						}
-					},
-				}
-			});
-
-			let error_kind_from_impls = links.iter().map(|link| match link.link_type {
-				LinkType::Chainable(_, ref error_kind_ty) => {
+			let error_kind_description_cases =
+				std::iter::once(quote! {
+					#error_kind_name::Msg(ref s) => s,
+				}).filter(|_| has_msg)
+				.chain(links.iter().map(|link| {
 					let variant_name = &link.variant.ident;
-					Some(quote! {
-						impl #impl_generics From<#error_kind_ty> for #error_kind_name #ty_generics #where_clause {
-							fn from(kind: #error_kind_ty) -> Self {
-								#error_kind_name::#variant_name(kind)
-							}
-						}
-					})
-				},
 
-				LinkType::Foreign(_) |
-				LinkType::Custom => None,
-			});
+					match (link.custom_description.as_ref(), &link.link_type) {
+						(Some(custom_description), &LinkType::Chainable(_, _)) |
+						(Some(custom_description), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
+							#error_kind_name::#variant_name(ref err) => {
+								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+								let result = (#custom_description)(err);
+								result
+							},
+						},
+
+						(Some(custom_description), &LinkType::Chainable(_, _)) |
+						(Some(custom_description), &LinkType::Foreign(_)) => quote! {
+							#error_kind_name::#variant_name(ref err) => #custom_description(err),
+						},
+
+						(Some(custom_description), &LinkType::Custom) => {
+							let pattern = fields_pattern(&link.variant);
+							let args = args(&link.variant);
+
+							if is_closure(custom_description) {
+								quote! {
+									#error_kind_name::#variant_name #pattern => {
+										#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+										let result = (#custom_description)(#args);
+										result
+									},
+								}
+							}
+							else {
+								quote! {
+									#error_kind_name::#variant_name #pattern => #custom_description(#args),
+								}
+							}
+						},
+
+						(None, &LinkType::Chainable(_, _)) => quote! {
+							#error_kind_name::#variant_name(ref kind) => kind.description(),
+						},
+
+						(None, &LinkType::Foreign(_)) => quote! {
+							#error_kind_name::#variant_name(ref err) => ::std::error::Error::description(err),
+						},
+
+						(None, &LinkType::Custom) => {
+							let pattern = fields_pattern_ignore(&link.variant);
+
+							quote! {
+								#error_kind_name::#variant_name #pattern => stringify!(#variant_name),
+							}
+						},
+					}
+				}));
+
+			let error_kind_display_cases =
+				std::iter::once(quote! {
+					#error_kind_name::Msg(ref s) => ::std::fmt::Display::fmt(s, f),
+				}).filter(|_| has_msg)
+				.chain(links.iter().map(|link| {
+					let variant_name = &link.variant.ident;
+
+					match (link.custom_display.as_ref(), &link.link_type) {
+						(Some(custom_display), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
+							#error_kind_name::#variant_name(ref kind) => {
+								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+								let result = (#custom_display)(kind);
+								result
+							},
+						},
+
+						(Some(custom_display), &LinkType::Chainable(_, _)) => quote! {
+							#error_kind_name::#variant_name(ref kind) => #custom_display(f, kind),
+						},
+
+						(Some(custom_display), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
+							#error_kind_name::#variant_name(ref err) => {
+								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+								let result = (#custom_display)(err);
+								result
+							},
+						},
+
+						(Some(custom_display), &LinkType::Foreign(_)) => quote! {
+							#error_kind_name::#variant_name(ref err) => #custom_display(f, err),
+						},
+
+						(Some(custom_display), &LinkType::Custom) => {
+							let pattern = fields_pattern(&link.variant);
+							let args = args(&link.variant);
+
+							if is_closure(custom_display) {
+								quote! {
+									#error_kind_name::#variant_name #pattern => {
+										#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
+										let result = (#custom_display)(#args);
+										result
+									},
+								}
+							}
+							else {
+								quote! {
+									#error_kind_name::#variant_name #pattern => #custom_display(f, #args),
+								}
+							}
+						},
+
+						(None, &LinkType::Chainable(_, _)) => quote! {
+							#error_kind_name::#variant_name(ref kind) => ::std::fmt::Display::fmt(kind, f),
+						},
+
+						(None, &LinkType::Foreign(_)) => quote! {
+							#error_kind_name::#variant_name(ref err) => ::std::fmt::Display::fmt(err, f),
+						},
+
+						(None, &LinkType::Custom) => {
+							let pattern = fields_pattern_ignore(&link.variant);
+
+							quote! {
+								#error_kind_name::#variant_name #pattern => ::std::fmt::Display::fmt(self.description(), f),
+							}
+						},
+					}
+				}));
+
+			let error_kind_from_impls =
+				std::iter::once(Some(quote! {
+					impl #impl_generics_lifetime From<&'__a str> for #error_kind_name #ty_generics #where_clause {
+						fn from(s: &'__a str) -> Self { #error_kind_name::Msg(s.to_string()) }
+					}
+
+					impl #impl_generics From<String> for #error_kind_name #ty_generics #where_clause {
+						fn from(s: String) -> Self { #error_kind_name::Msg(s) }
+					}
+				})).filter(|_| has_msg)
+				.chain(links.iter().map(|link| match link.link_type {
+					LinkType::Chainable(_, ref error_kind_ty) => {
+						let variant_name = &link.variant.ident;
+						Some(quote! {
+							impl #impl_generics From<#error_kind_ty> for #error_kind_name #ty_generics #where_clause {
+								fn from(kind: #error_kind_ty) -> Self {
+									#error_kind_name::#variant_name(kind)
+								}
+							}
+						})
+					},
+
+					LinkType::Foreign(_) |
+					LinkType::Custom => None,
+				}));
 
 			let error_cause_cases = links.iter().filter_map(|link| {
 				let variant_name = &link.variant.ident;
@@ -664,35 +683,45 @@ This struct is made of three things:
 				LinkType::Custom => None,
 			});
 
-			let error_from_impls = links.iter().filter_map(|link| match link.link_type {
-				LinkType::Chainable(ref error_ty, _) => {
-					let variant_name = &link.variant.ident;
-					Some(quote! {
-						impl #impl_generics From<#error_ty> for #error_name #ty_generics #where_clause {
-							fn from(err: #error_ty) -> Self {
-								#error_name(#error_kind_name::#variant_name(err.0), err.1)
+			let error_from_impls =
+				std::iter::once(quote! {
+					impl #impl_generics_lifetime From<&'__a str> for #error_name #ty_generics #where_clause {
+						fn from(s: &'__a str) -> Self { Self::from_kind(s.into()) }
+					}
+
+					impl #impl_generics From<String> for #error_name #ty_generics #where_clause {
+						fn from(s: String) -> Self { Self::from_kind(s.into()) }
+					}
+				}).filter(|_| has_msg)
+				.chain(links.iter().filter_map(|link| match link.link_type {
+					LinkType::Chainable(ref error_ty, _) => {
+						let variant_name = &link.variant.ident;
+						Some(quote! {
+							impl #impl_generics From<#error_ty> for #error_name #ty_generics #where_clause {
+								fn from(err: #error_ty) -> Self {
+									#error_name(#error_kind_name::#variant_name(err.0), err.1)
+								}
 							}
-						}
-					})
-				},
+						})
+					},
 
-				// Don't emit From impl for any generics of the errorkind because they cause conflicting trait impl errors.
-				// ie don't emit `impl From<T> for Error<T>` even if there's a variant `SomeError(T)`
-				LinkType::Foreign(syn::Ty::Path(_, syn::Path { global: false, ref segments })) if segments.len() == 1 && generics.contains(&segments[0].ident) => None,
+					// Don't emit From impl for any generics of the errorkind because they cause conflicting trait impl errors.
+					// ie don't emit `impl From<T> for Error<T>` even if there's a variant `SomeError(T)`
+					LinkType::Foreign(syn::Ty::Path(_, syn::Path { global: false, ref segments })) if segments.len() == 1 && generics.contains(&segments[0].ident) => None,
 
-				LinkType::Foreign(ref ty) => {
-					let variant_name = &link.variant.ident;
-					Some(quote! {
-						impl #impl_generics From<#ty> for #error_name #ty_generics #where_clause {
-							fn from(err: #ty) -> Self {
-								Self::from_kind(#error_kind_name::#variant_name(err))
+					LinkType::Foreign(ref ty) => {
+						let variant_name = &link.variant.ident;
+						Some(quote! {
+							impl #impl_generics From<#ty> for #error_name #ty_generics #where_clause {
+								fn from(err: #ty) -> Self {
+									Self::from_kind(#error_kind_name::#variant_name(err))
+								}
 							}
-						}
-					})
-				},
+						})
+					},
 
-				LinkType::Custom => None,
-			});
+					LinkType::Custom => None,
+				}));
 
 			let extract_backtrace_fn = if support_backtrace {
 				Some(quote! {
@@ -730,8 +759,6 @@ This struct is made of three things:
 					/// A string describing the error kind.
 					pub fn description(&self) -> &str {
 						match *self {
-							#error_kind_name::Msg(ref s) => s,
-
 							#(#error_kind_description_cases)*
 						}
 					}
@@ -740,22 +767,12 @@ This struct is made of three things:
 				impl #impl_generics ::std::fmt::Display for #error_kind_name #ty_generics #where_clause {
 					fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 						match *self {
-							#error_kind_name::Msg(ref s) => ::std::fmt::Display::fmt(s, f),
-
 							#(#error_kind_display_cases)*
 						}
 					}
 				}
 
 				#(#error_kind_from_impls)*
-
-				impl #impl_generics_lifetime From<&'__a str> for #error_kind_name #ty_generics #where_clause {
-					fn from(s: &'__a str) -> Self { #error_kind_name::Msg(s.to_string()) }
-				}
-
-				impl #impl_generics From<String> for #error_kind_name #ty_generics #where_clause {
-					fn from(s: String) -> Self { #error_kind_name::Msg(s) }
-				}
 
 				impl #impl_generics From<#error_name #ty_generics> for #error_kind_name #ty_generics #where_clause {
 					fn from(err: #error_name #ty_generics) -> Self { err.0 }
@@ -824,14 +841,6 @@ This struct is made of three things:
 
 				impl #impl_generics From<#error_kind_name #ty_generics> for #error_name #ty_generics #where_clause {
 					fn from(kind: #error_kind_name #ty_generics) -> Self { Self::from_kind(kind) }
-				}
-
-				impl #impl_generics_lifetime From<&'__a str> for #error_name #ty_generics #where_clause {
-					fn from(s: &'__a str) -> Self { Self::from_kind(s.into()) }
-				}
-
-				impl #impl_generics From<String> for #error_name #ty_generics #where_clause {
-					fn from(s: String) -> Self { Self::from_kind(s.into()) }
 				}
 
 				impl #impl_generics ::std::ops::Deref for #error_name #ty_generics #where_clause {

@@ -29,6 +29,8 @@ fn main() {
 	public_api_test();
 	cause();
 	inlined_description_and_display_and_cause();
+	test_without_msg_1();
+	test_without_msg_2();
 }
 
 // Upstream tests
@@ -519,5 +521,34 @@ mod generics_test {
 
 		#[error_chain(foreign)]
 		Foreign(io::Error),
+	}
+}
+
+fn test_without_msg_1() {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		#[error_chain(custom)]
+		HttpStatus(u32),
+	}
+}
+
+fn test_without_msg_2() {
+	#[derive(Debug, error_chain)]
+	pub enum ErrorKind {
+		#[error_chain(custom)]
+		HttpStatus(u32),
+	}
+
+	// Should not conflict
+	impl<'a> From<&'a str> for ErrorKind {
+		fn from(_: &'a str) -> Self {
+			unimplemented!()
+		}
+	}
+
+	impl From<String> for ErrorKind {
+		fn from(_: String) -> Self {
+			unimplemented!()
+		}
 	}
 }
