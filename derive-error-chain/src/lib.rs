@@ -791,7 +791,7 @@ This struct is made of three things:
 				#[allow(unused)]
 				impl #impl_generics #error_name #ty_generics #where_clause {
 					/// Constructs an error from a kind, and generates a backtrace.
-					pub fn from_kind(kind: #error_kind_name #ty_generics) -> #error_name #ty_generics {
+					pub fn from_kind(kind: #error_kind_name #ty_generics) -> Self {
 						#error_name(kind, #error_chain_name::State::default())
 					}
 
@@ -799,7 +799,7 @@ This struct is made of three things:
 					pub fn with_chain<__E, __K>(error: __E, kind: __K) -> Self
 						where __E: ::std::error::Error + Send + 'static, __K: Into<#error_kind_name #ty_generics> {
 
-						#error_name(kind.into(), #error_chain_name::State::new::<#error_name #ty_generics>(Box::new(error)))
+						#error_name(kind.into(), #error_chain_name::State::new::<Self>(Box::new(error)))
 					}
 
 					/// Returns the kind of the error.
