@@ -3,14 +3,21 @@ rust:
 - stable
 - beta
 - nightly
-matrix:
-  allow_failures:
-  - rust: nightly
-
-script: cd $CRATE && cargo build --verbose && cargo run
 
 env:
 - CRATE=derive-error-chain-tests
 - CRATE=derive-error-chain-tests-no-backtrace
+- CRATE=derive-error-chain-tests-nightly
+
+matrix:
+  allow_failures:
+  - rust: nightly
+  exclude:
+  - rust: stable
+    env: CRATE=derive-error-chain-tests-nightly
+  - rust: beta
+    env: CRATE=derive-error-chain-tests-nightly
+
+script: cd $CRATE && cargo build --verbose && cargo run
 
 sudo: false

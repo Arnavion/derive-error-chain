@@ -37,13 +37,13 @@
 //!
 //! ```ignore
 //! mod other_error {
-//!     #[derive(Debug, error_chain)]
+//!     #[derive(Debug, ErrorChain]
 //!     pub enum ErrorKind {
 //!         Msg(String),
 //!     }
 //! }
 //!
-//! #[derive(Debug, error_chain)]
+//! #[derive(Debug, ErrorChain]
 //! pub enum ErrorKind {
 //!     Msg(String),
 //!
@@ -247,53 +247,113 @@
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::cause()`
 //!     - Custom links: Returns `None`
 //!
-//! # Notes
+//! # Conflicts with `error-chain` macros when the `proc_macro` feature is enabled
 //!
-//! If you want to use other macros from the `error_chain` like `bail!`, note that the following code:
-//!
-//! ```ignore
-//! #[macro_use] extern crate derive_error_chain;
-//! #[macro_use] extern crate error_chain;
-//!
-//! #[derive(Debug, error_chain)]
-//! enum ErrorKind {
-//! }
-//! ```
-//!
-//! will fail to compile with:
-//!
-//! ```ignore
-//! error: macro `error_chain` may not be used for derive attributes
-//! ```
-//!
-//! This is because both crates export a macro named `error_chain` and the macro from the second crate overrides the first.
-//!
-//! To fix this, import `error_chain` before `derive_error_chain`:
-//!
-//! ```ignore
-//! #[macro_use] extern crate error_chain;
-//! #[macro_use] extern crate derive_error_chain;
-//! ```
-//!
-//! or use a fully-qualified path for the custom derive (nightly only):
+//! If you have the `proc_macro` feature enabled and have code like this:
 //!
 //! ```ignore
 //! #![feature(proc_macro)]
 //!
-//! extern crate derive_error_chain;
-//! #[macro_use] extern crate error_chain;
+//! #[macro_use] extern crate derive_error_chain;
+//! #[macro_use] extern crate error_chain; // Want to use `bail!` and `quick_main!`
 //!
-//! #[derive(Debug, derive_error_chain::error_chain)]
+//! #[derive(Debug, ErrorChain)]
 //! enum ErrorKind {
+//!     Msg(String),
+//!
+//!     #[error_chain(custom)]
+//!     Code(i32),
+//! }
+//!
+//! quick_main!(|| -> Result<()> {
+//!     bail!("failed");
+//! });
+//! ```
+//!
+//! it'll fail to compile with:
+//!
+//! ```ignore
+//! error: macro `error_chain` may not be used in attributes
+//! ```
+//!
+//! This is because the compiler thinks `#[error_chain(custom)]` is the invocation of an attribute macro, notices that `error_chain!` is
+//! a `macro_rules` macro brought into scope from the `error-chain` crate, and thus complains that a `macro_rules` macro cannot be used as
+//! an attribute macro. It does this even though there is no attribute macro named `error_chain` and that the custom derive from this crate
+//! has registered `error_chain` as an attribute it supports.
+//!
+//! See https://github.com/rust-lang/rust/issues/38356#issuecomment-324277403 for the discussion.
+//!
+//! To work around this, don't use `#[macro_use]` with the `error-chain` crate. Instead, either `use` the macros you need from it:
+//!
+//! ```ignore
+//! #![feature(proc_macro)]
+//!
+//! #[macro_use] extern crate derive_error_chain;
+//! extern crate error_chain;
+//!
+//! use error_chain::{ bail, quick_main };
+//!
+//! #[derive(Debug, ErrorChain)]
+//! enum ErrorKind {
+//!     Msg(String),
+//!
+//!     #[error_chain(custom)]
+//!     Code(i32),
+//! }
+//!
+//! quick_main!(|| -> Result<()> {
+//!     bail!("failed")
+//! });
+//! ```
+//!
+//! or fully qualify their paths:
+//!
+//! ```ignore
+//! #![feature(proc_macro)]
+//!
+//! #[macro_use] extern crate derive_error_chain;
+//! extern crate error_chain;
+//!
+//! #[derive(Debug, ErrorChain)]
+//! enum ErrorKind {
+//!     Msg(String),
+//!
+//!     #[error_chain(custom)]
+//!     Code(i32),
+//! }
+//!
+//! error_chain::quick_main!(|| -> Result<()> {
+//!     error_chain::bail!("failed")
+//! });
+//! ```
+//!
+//! `use`ing the `error_chain!` macro itself is more complicated: it must be renamed so that it doesn't just cause the above error again,
+//! and other macros it uses must also be imported, even though they're an implementation detail:
+//!
+//! ```ignore
+//! use error_chain::{ error_chain as error_chain_macro, error_chain_processed, error_chain_processing, impl_extract_backtrace, quick_error };
+//!
+//! error_chain_macro! {
 //! }
 //! ```
+//!
+//! To use it fully-qualified, the macros it depends on must still be `use`d to bring them into scope:
+//!
+//! ```ignore
+//! use error_chain::{ error_chain_processed, error_chain_processing, impl_extract_backtrace, quick_error };
+//!
+//! error_chain::error_chain! {
+//! }
+//! ```
+//!
+//! It's possible this experience will be made better before the `proc_macro` feature stabilizes.
 
 extern crate proc_macro;
 #[macro_use]
 extern crate quote;
 extern crate syn;
 
-#[proc_macro_derive(error_chain, attributes(error_chain))]
+#[proc_macro_derive(ErrorChain, attributes(error_chain))]
 pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let source = input.to_string();
 	let ast = syn::parse_derive_input(&source).unwrap();
@@ -902,7 +962,7 @@ This struct is made of three things:
 			}
 		},
 
-		_ => panic!("#[derive(error_chain)] can only be used with enums."),
+		_ => panic!("#[derive(ErrorChain] can only be used with enums."),
 	};
 
 	result.parse().unwrap()

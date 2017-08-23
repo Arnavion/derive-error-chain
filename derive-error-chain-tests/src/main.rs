@@ -2,9 +2,10 @@
 
 //! Test crate for derive-error-chain. If it runs, it's tested.
 
-extern crate error_chain;
 #[macro_use]
 extern crate derive_error_chain;
+#[macro_use]
+extern crate error_chain;
 
 fn main() {
 	smoke_test_1();
@@ -31,12 +32,13 @@ fn main() {
 	inlined_description_and_display_and_cause();
 	test_without_msg_1();
 	test_without_msg_2();
+	macro_conflicts();
 }
 
 // Upstream tests
 
 fn smoke_test_1() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	#[error_chain(error = "Error", result_ext = "ResultExt", result = "Result")]
 	pub enum ErrorKind {
 		Msg(String),
@@ -44,14 +46,14 @@ fn smoke_test_1() {
 }
 
 fn smoke_test_2() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 	}
 }
 
 fn smoke_test_4() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -73,7 +75,7 @@ fn smoke_test_4() {
 }
 
 fn smoke_test_8() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -88,7 +90,7 @@ fn smoke_test_8() {
 fn has_backtrace_depending_on_env() {
 	use std::env;
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -121,7 +123,7 @@ fn has_backtrace_depending_on_env() {
 fn chain_err() {
 	use std::fmt;
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -135,13 +137,13 @@ fn chain_err() {
 
 fn links() {
 	mod test {
-		#[derive(Debug, error_chain)]
+		#[derive(Debug, ErrorChain)]
 		pub enum ErrorKind {
 			Msg(String),
 		}
 	}
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -189,7 +191,7 @@ mod foreign_link_test {
 		}
 	}
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -247,13 +249,13 @@ mod attributes_test {
 
 	#[cfg(foo)]
 	mod inner {
-		#[derive(Debug, error_chain)]
+		#[derive(Debug, ErrorChain)]
 		pub enum ErrorKind {
 			Msg(String),
 		}
 	}
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -272,7 +274,7 @@ mod attributes_test {
 }
 
 fn with_result() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 	}
@@ -281,7 +283,7 @@ fn with_result() {
 }
 
 fn without_result() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	#[error_chain(result = "")]
 	pub enum ErrorKind {
 		Msg(String),
@@ -292,13 +294,13 @@ fn without_result() {
 
 fn documentation() {
 	mod inner {
-		#[derive(Debug, error_chain)]
+		#[derive(Debug, ErrorChain)]
 		pub enum ErrorKind {
 			Msg(String),
 		}
 	}
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -317,13 +319,13 @@ fn documentation() {
 }
 
 mod multiple_error_same_mod {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	#[error_chain(error = "MyError", result_ext = "MyResultExt", result = "MyResult")]
 	pub enum MyErrorKind {
 		Msg(String),
 	}
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 	}
@@ -331,7 +333,7 @@ mod multiple_error_same_mod {
 
 #[deny(dead_code)]
 mod allow_dead_code {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	#[error_chain(result = "")]
 	pub enum ErrorKind {
 		Msg(String),
@@ -341,13 +343,13 @@ mod allow_dead_code {
 // Make sure links actually work!
 fn rustup_regression() {
 	mod mock {
-		#[derive(Debug, error_chain)]
+		#[derive(Debug, ErrorChain)]
 		pub enum ErrorKind {
 			Msg(String),
 		}
 	}
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -361,7 +363,7 @@ fn rustup_regression() {
 }
 
 fn error_patterns() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 	}
@@ -376,7 +378,7 @@ fn error_patterns() {
 fn rewrapping() {
 	use std::env::VarError::{self, NotPresent, NotUnicode};
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	#[error_chain(error = "MyError", result_ext = "MyResultExt", result = "MyResult")]
 	pub enum MyErrorKind {
 		Msg(String),
@@ -407,7 +409,7 @@ fn rewrapping() {
 // Own tests
 
 mod test2 {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -426,7 +428,7 @@ fn public_api_test() {
 }
 
 fn cause() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -444,7 +446,7 @@ fn cause() {
 }
 
 fn inlined_description_and_display_and_cause() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		Msg(String),
 
@@ -471,7 +473,7 @@ mod generics_test {
 
 	mod inner1 {
 		use std::fmt;
-		#[derive(Debug, error_chain)]
+		#[derive(Debug, ErrorChain)]
 		pub enum ErrorKind<T: Send + fmt::Debug + 'static> {
 			Msg(String),
 
@@ -481,13 +483,13 @@ mod generics_test {
 	}
 
 	mod inner2 {
-		#[derive(Debug, error_chain)]
+		#[derive(Debug, ErrorChain)]
 		pub enum ErrorKind {
 			Msg(String),
 		}
 	}
 
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind<T: error::Error + Send + 'static, U>
 		where U: Send + fmt::Debug + fmt::Display + 'static {
 		Msg(String),
@@ -525,7 +527,7 @@ mod generics_test {
 }
 
 fn test_without_msg_1() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		#[error_chain(custom)]
 		HttpStatus(u32),
@@ -533,7 +535,7 @@ fn test_without_msg_1() {
 }
 
 fn test_without_msg_2() {
-	#[derive(Debug, error_chain)]
+	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
 		#[error_chain(custom)]
 		HttpStatus(u32),
@@ -550,5 +552,36 @@ fn test_without_msg_2() {
 		fn from(_: String) -> Self {
 			unimplemented!()
 		}
+	}
+}
+
+fn macro_conflicts() {
+	#[derive(Debug, ErrorChain)]
+	#[error_chain(result = "MyResult")]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(custom)]
+		Code(i32),
+	}
+
+	error_chain! {
+		types { ECError, ECErrorKind, ECResultExt, ECResult; }
+	}
+
+	quick_main!(|| -> MyResult<()> {
+		bail!("failed")
+	});
+
+	fn foo() -> MyResult<()> {
+		bail!("failed")
+	}
+
+	match foo() {
+		Ok(_) => unreachable!(),
+		Err(err) => match *err.kind() {
+			ErrorKind::Msg(ref s) if s == "failed" => (),
+			_ => unreachable!(),
+		},
 	}
 }
