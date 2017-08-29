@@ -391,74 +391,79 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 	let generics: std::collections::HashSet<_> = ast.generics.ty_params.iter().map(|ty_param| ty_param.ident.clone()).collect();
 
-	let mut error_name = syn::parse_ident("Error").unwrap();
-	let mut result_ext_name = syn::parse_ident("ResultExt").unwrap();
-	let mut result_name = Some(syn::parse_ident("Result").unwrap());
+	let mut error_name = syn::Ident::from("Error");
+	let mut result_ext_name = syn::Ident::from("ResultExt");
+	let mut result_name = Some(syn::Ident::from("Result"));
 	let mut support_backtrace = true;
 	let mut has_msg = false;
 
 	for attr in ast.attrs {
 		match attr.value {
-			syn::MetaItem::List(ref ident, ref nested_meta_items) if ident == "error_chain" => {
+			syn::MetaItem::List(ident, nested_meta_items) => {
+				if ident != "error_chain" {
+					continue;
+				}
+
 				for nested_meta_item in nested_meta_items {
-					match *nested_meta_item {
-						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
-							if ident == "error" {
-								error_name = syn::parse_ident(value).map_err(|err| format!("couldn't parse error attribute as an identifier - {}", err)).unwrap()
-							}
-							else if ident == "result_ext" {
-								result_ext_name = syn::parse_ident(value).map_err(|err| format!("couldn't parse result_ext attribute as an identifier - {}", err)).unwrap()
-							}
-							else if ident == "result" {
-								result_name =
-									if value == "" {
-										None
-									}
-									else {
-										Some(syn::parse_ident(value).map_err(|err| format!("couldn't parse result attribute as an identifier - {}", err)).unwrap())
-									}
-							}
-							else if ident == "backtrace" && value == "false" {
-								support_backtrace = false
-							}
+					match nested_meta_item {
+						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ident, syn::Lit::Str(value, _))) => match ident.as_ref() {
+							"error" => error_name = syn::parse_ident(&value).unwrap_or_else(|err|
+								panic!("Could not parse `error` value as an identifier - {}", err)),
+
+							"result_ext" => result_ext_name = syn::parse_ident(&value).unwrap_or_else(|err|
+								panic!("Could not parse `result_ext` value as an identifier - {}", err)),
+
+							"result" => result_name =
+								if value == "" {
+									None
+								}
+								else {
+									Some(syn::parse_ident(&value).unwrap_or_else(|err|
+										panic!("Could not parse `result` value as an identifier - {}", err)))
+								},
+
+							"backtrace" => support_backtrace = value.parse().unwrap_or_else(|err|
+								panic!("Could not parse `backtrace` value - {}", err)),
+
+							_ =>
+								panic!("Could not parse `error_chain` attribute - expected one of `error`, `result_ext`, `result`, `backtrace` but got {}", ident),
 						},
 
-						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Bool(false))) if ident == "backtrace" =>
-							support_backtrace = false,
+						syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Bool(value))) if ident == "backtrace" =>
+							support_backtrace = value,
 
-						_ => { },
+						_ => panic!("Could not parse `error_chain` attribute - expected one of `error`, `result_ext`, `result`, `backtrace` with a string or boolean value"),
 					}
 				}
 			},
 
-			_ => { },
+			_ => panic!("Could not parse `error_chain` attribute - expected one of `error`, `result_ext`, `result`, `backtrace`"),
 		}
 	}
 
-	let error_chain_name = syn::parse_ident(&(error_name.to_string() + "_error_chain")).unwrap();
-
-	struct Link {
-		variant: syn::Variant,
-		link_type: LinkType,
-		custom_description: Option<syn::Expr>,
-		custom_display: Option<syn::Expr>,
-		custom_cause: Option<syn::Expr>,
-	}
-
-	enum LinkType {
-		Chainable(syn::Ty, syn::Ty),
-		Foreign(syn::Ty),
-		Custom,
-	}
+	let error_chain_name = syn::parse_ident(&format!("{}_error_chain", error_name)).unwrap_or_else(|err|
+		panic!("Could not generate error_chain crate name as a valid ident - {}", err));
 
 	let result = match ast.body {
 		syn::Body::Enum(variants) => {
 			let mut links = vec![];
 
 			for variant in variants {
-				if &variant.ident == "Msg" {
-					has_msg = true;
-					continue;
+				let syn::Variant { ident: variant_ident, attrs, data: variant_data, .. } = variant;
+
+				if variant_ident == "Msg" {
+					if let syn::VariantData::Tuple(ref fields) = variant_data {
+						if fields.len() == 1 {
+							if let syn::Ty::Path(None, syn::Path { global: false, ref segments }) = fields[0].ty {
+								if segments.len() == 1 && segments[0].ident == "String" {
+									has_msg = true;
+									continue;
+								}
+							}
+						}
+					}
+
+					panic!("Expected Msg member to be a tuple of String");
 				}
 
 				let mut link_type = None;
@@ -466,69 +471,71 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				let mut custom_display = None;
 				let mut custom_cause = None;
 
-				for attr in &variant.attrs {
+				for attr in attrs {
 					if let syn::MetaItem::List(ref ident, ref nested_meta_items) = attr.value {
-						if ident == "error_chain" {
-							for nested_meta_item in nested_meta_items {
-								match *nested_meta_item {
-									syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) => {
-										if ident == "foreign" {
-											match variant.data {
-												syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
-													link_type = Some(LinkType::Foreign(fields[0].ty.clone())),
+						if ident != "error_chain" {
+							continue;
+						}
 
-												_ => panic!("Foreign link {} must be a tuple of one element (the foreign error type).", variant.ident),
-											}
-										}
-										else if ident == "custom" {
-											link_type = Some(LinkType::Custom);
-										}
+						for nested_meta_item in nested_meta_items {
+							match *nested_meta_item {
+								syn::NestedMetaItem::MetaItem(syn::MetaItem::Word(ref ident)) => match ident.as_ref() {
+									"foreign" => match variant_data {
+										syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
+											link_type = Some(LinkType::Foreign(fields[0].ty.clone())),
+
+										_ => panic!("Foreign link {} must be a tuple of one element (the foreign error type).", variant_ident),
 									},
 
-									syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => {
-										if ident == "link" {
-											match variant.data {
-												syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
-													link_type = Some(LinkType::Chainable(
-														syn::parse_type(value).unwrap_or_else(|err| {
-															let variant_name = &variant.ident;
-															panic!("Could not parse link attribute of member {} as a type - {}", variant_name, err)
-														}),
-														fields[0].ty.clone())),
+									"custom" => link_type = Some(LinkType::Custom),
 
-												_ => panic!("Chainable link {} must be a tuple of one element (the chainable error kind).", variant.ident),
-											}
-										}
-										else if ident == "description" {
-											custom_description = Some(syn::parse_expr(value).unwrap());
-										}
-										else if ident == "display" {
-											custom_display = Some(syn::parse_expr(value).unwrap());
-										}
-										else if ident == "cause" {
-											custom_cause = Some(syn::parse_expr(value).unwrap());
-										}
+									_ => panic!(
+										"Could not parse `error_chain` attribute of member {} - expected one of `foreign`, `custom` but got {}",
+										variant_ident, ident),
+								},
+
+								syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref ident, syn::Lit::Str(ref value, _))) => match ident.as_ref() {
+									"link" => match variant_data {
+										syn::VariantData::Tuple(ref fields) if fields.len() == 1 =>
+											link_type = Some(LinkType::Chainable(
+												syn::parse_type(value).unwrap_or_else(|err|
+													panic!("Could not parse `link` attribute of member {} as a type - {}", variant_ident, err)),
+												fields[0].ty.clone())),
+
+										_ => panic!("Chainable link {} must be a tuple of one element (the chainable error kind).", variant_ident),
 									},
 
-									_ => { },
-								}
+									"description" => custom_description = Some(syn::parse_expr(value).unwrap_or_else(|err|
+										panic!("Could not parse `description` attribute of member {} as an expression - {}", variant_ident, err))),
+
+									"display" => custom_display = Some(syn::parse_expr(value).unwrap_or_else(|err|
+										panic!("Could not parse `display` attribute of member {} as an expression - {}", variant_ident, err))),
+
+									"cause" => custom_cause = Some(syn::parse_expr(value).unwrap_or_else(|err|
+										panic!("Could not parse `cause` attribute of member {} as an expression - {}", variant_ident, err))),
+
+									_ => panic!(
+										"Could not parse `error_chain` attribute of member {} - expected one of `link`, `description`, `display`, `cause` but got {}",
+										variant_ident, ident),
+								},
+
+								_ => panic!("Could not parse `error_chain` attribute of member {} - expected word or name-value meta item", variant_ident),
 							}
 						}
 					}
 				}
 
 				let link_type =
-					link_type.unwrap_or_else(|| {
-						let variant_name = &variant.ident;
-						panic!(r#"Member {} does not have any of #[error_chain(link = "...")] or #[error_chain(foreign)] or #[error_chain(custom)]."#, variant_name)
-					});
+					link_type.unwrap_or_else(||
+						panic!(r#"Member {} does not have any of #[error_chain(link = "...")] or #[error_chain(foreign)] or #[error_chain(custom)]."#, variant_ident));
 
 				links.push(Link {
-					variant: variant,
-					link_type: link_type,
-					custom_description: custom_description,
-					custom_display: custom_display,
-					custom_cause: custom_cause,
+					variant_ident,
+					variant_data,
+					link_type,
+					custom_description,
+					custom_display,
+					custom_cause,
 				});
 			}
 
@@ -537,12 +544,12 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					#error_kind_name::Msg(ref s) => s,
 				}).filter(|_| has_msg)
 				.chain(links.iter().map(|link| {
-					let variant_name = &link.variant.ident;
+					let variant_ident = &link.variant_ident;
 
 					match (link.custom_description.as_ref(), &link.link_type) {
 						(Some(custom_description), &LinkType::Chainable(_, _)) |
 						(Some(custom_description), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
-							#error_kind_name::#variant_name(ref err) => {
+							#error_kind_name::#variant_ident(ref err) => {
 								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 								{ (#custom_description)(err) }
 							},
@@ -550,16 +557,16 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 						(Some(custom_description), &LinkType::Chainable(_, _)) |
 						(Some(custom_description), &LinkType::Foreign(_)) => quote! {
-							#error_kind_name::#variant_name(ref err) => #custom_description(err),
+							#error_kind_name::#variant_ident(ref err) => #custom_description(err),
 						},
 
 						(Some(custom_description), &LinkType::Custom) => {
-							let pattern = fields_pattern(&link.variant);
-							let args = args(&link.variant);
+							let pattern = fields_pattern(&link.variant_data);
+							let args = args(&link.variant_data);
 
 							if is_closure(custom_description) {
 								quote! {
-									#error_kind_name::#variant_name #pattern => {
+									#error_kind_name::#variant_ident #pattern => {
 										#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 										{ (#custom_description)(#args) }
 									},
@@ -567,24 +574,24 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 							}
 							else {
 								quote! {
-									#error_kind_name::#variant_name #pattern => #custom_description(#args),
+									#error_kind_name::#variant_ident #pattern => #custom_description(#args),
 								}
 							}
 						},
 
 						(None, &LinkType::Chainable(_, _)) => quote! {
-							#error_kind_name::#variant_name(ref kind) => kind.description(),
+							#error_kind_name::#variant_ident(ref kind) => kind.description(),
 						},
 
 						(None, &LinkType::Foreign(_)) => quote! {
-							#error_kind_name::#variant_name(ref err) => ::std::error::Error::description(err),
+							#error_kind_name::#variant_ident(ref err) => ::std::error::Error::description(err),
 						},
 
 						(None, &LinkType::Custom) => {
-							let pattern = fields_pattern_ignore(&link.variant);
+							let pattern = fields_pattern_ignore(&link.variant_data);
 
 							quote! {
-								#error_kind_name::#variant_name #pattern => stringify!(#variant_name),
+								#error_kind_name::#variant_ident #pattern => stringify!(#variant_ident),
 							}
 						},
 					}
@@ -595,38 +602,38 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 					#error_kind_name::Msg(ref s) => ::std::fmt::Display::fmt(s, f),
 				}).filter(|_| has_msg)
 				.chain(links.iter().map(|link| {
-					let variant_name = &link.variant.ident;
+					let variant_ident = &link.variant_ident;
 
 					match (link.custom_display.as_ref(), &link.link_type) {
 						(Some(custom_display), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
-							#error_kind_name::#variant_name(ref kind) => {
+							#error_kind_name::#variant_ident(ref kind) => {
 								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 								{ (#custom_display)(kind) }
 							},
 						},
 
 						(Some(custom_display), &LinkType::Chainable(_, _)) => quote! {
-							#error_kind_name::#variant_name(ref kind) => #custom_display(f, kind),
+							#error_kind_name::#variant_ident(ref kind) => #custom_display(f, kind),
 						},
 
 						(Some(custom_display), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
-							#error_kind_name::#variant_name(ref err) => {
+							#error_kind_name::#variant_ident(ref err) => {
 								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 								{ (#custom_display)(err) }
 							},
 						},
 
 						(Some(custom_display), &LinkType::Foreign(_)) => quote! {
-							#error_kind_name::#variant_name(ref err) => #custom_display(f, err),
+							#error_kind_name::#variant_ident(ref err) => #custom_display(f, err),
 						},
 
 						(Some(custom_display), &LinkType::Custom) => {
-							let pattern = fields_pattern(&link.variant);
-							let args = args(&link.variant);
+							let pattern = fields_pattern(&link.variant_data);
+							let args = args(&link.variant_data);
 
 							if is_closure(custom_display) {
 								quote! {
-									#error_kind_name::#variant_name #pattern => {
+									#error_kind_name::#variant_ident #pattern => {
 										#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 										{ (#custom_display)(#args) }
 									},
@@ -634,24 +641,24 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 							}
 							else {
 								quote! {
-									#error_kind_name::#variant_name #pattern => #custom_display(f, #args),
+									#error_kind_name::#variant_ident #pattern => #custom_display(f, #args),
 								}
 							}
 						},
 
 						(None, &LinkType::Chainable(_, _)) => quote! {
-							#error_kind_name::#variant_name(ref kind) => ::std::fmt::Display::fmt(kind, f),
+							#error_kind_name::#variant_ident(ref kind) => ::std::fmt::Display::fmt(kind, f),
 						},
 
 						(None, &LinkType::Foreign(_)) => quote! {
-							#error_kind_name::#variant_name(ref err) => ::std::fmt::Display::fmt(err, f),
+							#error_kind_name::#variant_ident(ref err) => ::std::fmt::Display::fmt(err, f),
 						},
 
 						(None, &LinkType::Custom) => {
-							let pattern = fields_pattern_ignore(&link.variant);
+							let pattern = fields_pattern_ignore(&link.variant_data);
 
 							quote! {
-								#error_kind_name::#variant_name #pattern => ::std::fmt::Display::fmt(self.description(), f),
+								#error_kind_name::#variant_ident #pattern => ::std::fmt::Display::fmt(self.description(), f),
 							}
 						},
 					}
@@ -669,11 +676,11 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				})).filter(|_| has_msg)
 				.chain(links.iter().map(|link| match link.link_type {
 					LinkType::Chainable(_, ref error_kind_ty) => {
-						let variant_name = &link.variant.ident;
+						let variant_ident = &link.variant_ident;
 						Some(quote! {
 							impl #impl_generics From<#error_kind_ty> for #error_kind_name #ty_generics #where_clause {
 								fn from(kind: #error_kind_ty) -> Self {
-									#error_kind_name::#variant_name(kind)
+									#error_kind_name::#variant_ident(kind)
 								}
 							}
 						})
@@ -684,16 +691,16 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 				}));
 
 			let error_cause_cases = links.iter().filter_map(|link| {
-				let variant_name = &link.variant.ident;
+				let variant_ident = &link.variant_ident;
 
 				match (link.custom_cause.as_ref(), &link.link_type) {
 					(Some(ref custom_cause), _) => Some({
-						let pattern = fields_pattern(&link.variant);
-						let args = args(&link.variant);
+						let pattern = fields_pattern(&link.variant_data);
+						let args = args(&link.variant_data);
 
 						if is_closure(custom_cause) {
 							quote! {
-								#error_kind_name::#variant_name #pattern => {
+								#error_kind_name::#variant_ident #pattern => {
 									#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 									let result = (#custom_cause)(#args);
 									Some(result)
@@ -702,13 +709,13 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						}
 						else {
 							quote! {
-								#error_kind_name::#variant_name #pattern => Some(#custom_cause(#args)),
+								#error_kind_name::#variant_ident #pattern => Some(#custom_cause(#args)),
 							}
 						}
 					}),
 
 					(None, &LinkType::Foreign(_)) => Some(quote! {
-						#error_kind_name::#variant_name(ref err) => ::std::error::Error::cause(err),
+						#error_kind_name::#variant_ident(ref err) => ::std::error::Error::cause(err),
 					}),
 
 					(None, &LinkType::Chainable(_, _)) |
@@ -749,11 +756,11 @@ This struct is made of three things:
 				}).filter(|_| has_msg)
 				.chain(links.iter().filter_map(|link| match link.link_type {
 					LinkType::Chainable(ref error_ty, _) => {
-						let variant_name = &link.variant.ident;
+						let variant_ident = &link.variant_ident;
 						Some(quote! {
 							impl #impl_generics From<#error_ty> for #error_name #ty_generics #where_clause {
 								fn from(err: #error_ty) -> Self {
-									#error_name(#error_kind_name::#variant_name(err.0), err.1)
+									#error_name(#error_kind_name::#variant_ident(err.0), err.1)
 								}
 							}
 						})
@@ -761,14 +768,15 @@ This struct is made of three things:
 
 					// Don't emit From impl for any generics of the errorkind because they cause conflicting trait impl errors.
 					// ie don't emit `impl From<T> for Error<T>` even if there's a variant `SomeError(T)`
-					LinkType::Foreign(syn::Ty::Path(_, syn::Path { global: false, ref segments })) if segments.len() == 1 && generics.contains(&segments[0].ident) => None,
+					LinkType::Foreign(syn::Ty::Path(_, syn::Path { global: false, ref segments }))
+						if segments.len() == 1 && generics.contains(&segments[0].ident) => None,
 
 					LinkType::Foreign(ref ty) => {
-						let variant_name = &link.variant.ident;
+						let variant_ident = &link.variant_ident;
 						Some(quote! {
 							impl #impl_generics From<#ty> for #error_name #ty_generics #where_clause {
 								fn from(err: #ty) -> Self {
-									Self::from_kind(#error_kind_name::#variant_name(err))
+									Self::from_kind(#error_kind_name::#variant_ident(err))
 								}
 							}
 						})
@@ -962,6 +970,21 @@ This struct is made of three things:
 	result.parse().unwrap()
 }
 
+struct Link {
+	variant_ident: syn::Ident,
+	variant_data: syn::VariantData,
+	link_type: LinkType,
+	custom_description: Option<syn::Expr>,
+	custom_display: Option<syn::Expr>,
+	custom_cause: Option<syn::Expr>,
+}
+
+enum LinkType {
+	Chainable(syn::Ty, syn::Ty),
+	Foreign(syn::Ty),
+	Custom,
+}
+
 fn is_closure(expr: &syn::Expr) -> bool {
 	if let syn::ExprKind::Closure(..) = expr.node {
 		true
@@ -971,52 +994,52 @@ fn is_closure(expr: &syn::Expr) -> bool {
 	}
 }
 
-fn fields_pattern(variant: &syn::Variant) -> quote::Tokens {
-	match variant.data {
+fn fields_pattern(variant_data: &syn::VariantData) -> quote::Tokens {
+	match *variant_data {
 		syn::VariantData::Struct(ref fields) => {
 			let fields = fields.iter().map(|f| {
-				let field_name = &f.ident;
+				let field_name = f.ident.as_ref().unwrap();
 				quote!(ref #field_name)
 			});
-			quote!({ #(#fields),* })
+			quote!({ #(#fields,)* })
 		},
 
 		syn::VariantData::Tuple(ref fields) => {
 			let fields = fields.iter().enumerate().map(|(i, _)| {
-				let field_name = syn::parse_ident(&format!("value{}", i)).unwrap();
+				let field_name = syn::Ident::from(format!("value{}", i));
 				quote!(ref #field_name)
 			});
-			quote!((#(#fields),*))
+			quote!((#(#fields,)*))
 		},
 
 		syn::VariantData::Unit => quote!(),
 	}
 }
 
-fn fields_pattern_ignore(variant: &syn::Variant) -> quote::Tokens {
-	match variant.data {
+fn fields_pattern_ignore(variant_data: &syn::VariantData) -> quote::Tokens {
+	match *variant_data {
 		syn::VariantData::Struct(_) => quote!({ .. }),
 		syn::VariantData::Tuple(_) => quote!((..)),
 		syn::VariantData::Unit => quote!(),
 	}
 }
 
-fn args(variant: &syn::Variant) -> quote::Tokens {
-	match variant.data {
+fn args(variant_data: &syn::VariantData) -> quote::Tokens {
+	match *variant_data {
 		syn::VariantData::Struct(ref fields) => {
 			let fields = fields.iter().map(|f| {
-				let field_name = &f.ident;
+				let field_name = f.ident.as_ref().unwrap();
 				quote!(#field_name)
 			});
-			quote!(#(#fields),*)
+			quote!(#(#fields,)*)
 		},
 
 		syn::VariantData::Tuple(ref fields) => {
 			let fields = fields.iter().enumerate().map(|(i, _)| {
-				let field_name = syn::parse_ident(&format!("value{}", i)).unwrap();
+				let field_name = syn::Ident::from(format!("value{}", i));
 				quote!(#field_name)
 			});
-			quote!(#(#fields),*)
+			quote!(#(#fields,)*)
 		},
 
 		syn::VariantData::Unit => quote!(),
