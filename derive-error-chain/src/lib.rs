@@ -544,8 +544,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						(Some(custom_description), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
 							#error_kind_name::#variant_name(ref err) => {
 								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-								let result = (#custom_description)(err);
-								result
+								{ (#custom_description)(err) }
 							},
 						},
 
@@ -562,8 +561,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 								quote! {
 									#error_kind_name::#variant_name #pattern => {
 										#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-										let result = (#custom_description)(#args);
-										result
+										{ (#custom_description)(#args) }
 									},
 								}
 							}
@@ -603,8 +601,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						(Some(custom_display), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
 							#error_kind_name::#variant_name(ref kind) => {
 								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-								let result = (#custom_display)(kind);
-								result
+								{ (#custom_display)(kind) }
 							},
 						},
 
@@ -615,8 +612,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 						(Some(custom_display), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
 							#error_kind_name::#variant_name(ref err) => {
 								#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-								let result = (#custom_display)(err);
-								result
+								{ (#custom_display)(err) }
 							},
 						},
 
@@ -632,8 +628,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 								quote! {
 									#error_kind_name::#variant_name #pattern => {
 										#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
-										let result = (#custom_display)(#args);
-										result
+										{ (#custom_display)(#args) }
 									},
 								}
 							}
