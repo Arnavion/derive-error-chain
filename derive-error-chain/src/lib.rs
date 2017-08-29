@@ -1,4 +1,3 @@
-#![crate_type = "proc-macro"]
 #![recursion_limit = "300"]
 
 //! A Macros 1.1 implementation of https://crates.io/crates/error-chain
