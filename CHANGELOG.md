@@ -1,4 +1,9 @@
-# v0.10.1
+# v0.11.0 (2017-09-07)
+
+- BREAKING CHANGE: The enum attribute `#[derive(error_chain)]` is now `#[derive(ErrorChain)]` to comply with upcoming Rust changes - `#[derive(error_chain)]` would conflict with `#[error_chain(...)]` since the latter appears to be a valid attribute macro. The variant attribute `#[error_chain]` is unchanged, but check the "Conflicts with `error-chain` macros when the `proc_macro` feature is enabled" section in the docs for a caveat.
+- The `Msg(String)` variant is now optional. If omitted, the ErrorKind and Error will not impl `From<String>` and `From<&str>`
+
+# v0.10.1 (2017-05-13)
 
 - Added support for generic errorkinds.
 
