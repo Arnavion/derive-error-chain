@@ -12,7 +12,6 @@ fn main() {
 	smoke_test_2();
 	smoke_test_4();
 	smoke_test_8();
-	has_backtrace_depending_on_env();
 	chain_err();
 	links();
 
@@ -84,39 +83,6 @@ fn smoke_test_8() {
 
 		#[error_chain(custom)]
 		AccessDenied,
-	}
-}
-
-fn has_backtrace_depending_on_env() {
-	use std::env;
-
-	#[derive(Debug, ErrorChain)]
-	pub enum ErrorKind {
-		Msg(String),
-
-		#[error_chain(custom)]
-		MyError,
-	}
-
-	let original_value = env::var_os("RUST_BACKTRACE");
-
-	// missing RUST_BACKTRACE
-	env::remove_var("RUST_BACKTRACE");
-	let err = Error::from(ErrorKind::MyError);
-	assert!(err.backtrace().is_none());
-
-	// RUST_BACKTRACE=0
-	env::set_var("RUST_BACKTRACE", "0");
-	let err = Error::from(ErrorKind::MyError);
-	assert!(err.backtrace().is_none());
-
-	// RUST_BACKTRACE set to anything but 0
-	env::set_var("RUST_BACKTRACE", "yes");
-	let err = Error::from(ErrorKind::MyError);
-	assert!(err.backtrace().is_some());
-
-	if let Some(var) = original_value {
-		env::set_var("RUST_BACKTRACE", var);
 	}
 }
 

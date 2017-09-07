@@ -330,7 +330,7 @@
 //! and other macros it uses must also be imported, even though they're an implementation detail:
 //!
 //! ```ignore
-//! use error_chain::{ error_chain as error_chain_macro, error_chain_processed, error_chain_processing, impl_extract_backtrace, quick_error };
+//! use error_chain::{ error_chain as error_chain_macro, error_chain_processing, impl_error_chain_kind, impl_error_chain_processed, impl_extract_backtrace };
 //!
 //! error_chain_macro! {
 //! }
@@ -339,7 +339,7 @@
 //! To use it fully-qualified, the macros it depends on must still be `use`d to bring them into scope:
 //!
 //! ```ignore
-//! use error_chain::{ error_chain_processed, error_chain_processing, impl_extract_backtrace, quick_error };
+//! use error_chain::{ error_chain_processing, impl_error_chain_kind, impl_error_chain_processed, impl_extract_backtrace };
 //!
 //! error_chain::error_chain! {
 //! }
@@ -362,6 +362,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut generics_lifetime = ast.generics.clone();
 	generics_lifetime.lifetimes.push(syn::LifetimeDef::new("'__a"));
 	let (impl_generics_lifetime, _, _) = generics_lifetime.split_for_impl();
+
 	let mut result_generics = ast.generics.clone();
 	result_generics.ty_params.push(syn::TyParam {
 		attrs: vec![],
@@ -370,14 +371,18 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		default: None,
 	});
 	let (_, result_ty_generics, _) = result_generics.split_for_impl();
-	let mut result_ext_generics = ast.generics.clone();
-	result_ext_generics.ty_params.push(syn::TyParam {
+
+	let mut result_ext_generics_t = ast.generics.clone();
+	result_ext_generics_t.ty_params.push(syn::TyParam {
 		attrs: vec![],
 		ident: syn::Ident::from("__T"),
 		bounds: vec![],
 		default: None,
 	});
-	result_ext_generics.ty_params.push(syn::TyParam {
+	let (result_ext_impl_generics_t, result_ext_ty_generics_t, _) = result_ext_generics_t.split_for_impl();
+
+	let mut result_ext_generics_t_e = result_ext_generics_t.clone();
+	result_ext_generics_t_e.ty_params.push(syn::TyParam {
 		attrs: vec![],
 		ident: syn::Ident::from("__E"),
 		bounds: vec![
@@ -387,7 +392,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 		],
 		default: None,
 	});
-	let (result_ext_impl_generics, result_ext_ty_generics, _) = result_ext_generics.split_for_impl();
+	let (result_ext_impl_generics_t_e, _, _) = result_ext_generics_t_e.split_for_impl();
 
 	let generics: std::collections::HashSet<_> = ast.generics.ty_params.iter().map(|ty_param| ty_param.ident.clone()).collect();
 
@@ -859,22 +864,34 @@ This struct is made of three things:
 
 					/// Constructs a chained error from another error and a kind, and generates a backtrace.
 					pub fn with_chain<__E, __K>(error: __E, kind: __K) -> Self
-						where __E: ::std::error::Error + Send + 'static, __K: Into<#error_kind_name #ty_generics> {
+						where __E: ::std::error::Error + Send + 'static, __K: Into<#error_kind_name #ty_generics>
+					{
+						#error_name::with_boxed_chain(Box::new(error), kind)
+					}
 
-						#error_name(kind.into(), #error_chain_name::State::new::<Self>(Box::new(error)))
+					/// Constructs a chained error from another boxed error and a kind, and generates a backtrace
+					pub fn with_boxed_chain<__K>(error: Box<::std::error::Error + Send>, kind: __K) -> #error_name #ty_generics
+						where __K: Into<#error_kind_name #ty_generics>
+					{
+						#error_name(kind.into(), #error_chain_name::State::new::<Self>(error))
 					}
 
 					/// Returns the kind of the error.
 					pub fn kind(&self) -> &#error_kind_name #ty_generics { &self.0 }
 
 					/// Iterates over the error chain.
-					pub fn iter(&self) -> #error_chain_name::ErrorChainIter {
+					pub fn iter(&self) -> #error_chain_name::Iter {
 						#error_chain_name::ChainedError::iter(self)
 					}
 
 					/// Returns the backtrace associated with this error.
 					pub fn backtrace(&self) -> Option<&#error_chain_name::Backtrace> {
 						self.1.backtrace()
+					}
+
+					/// Extends the error chain with a new entry.
+					pub fn chain_err<__F, __EK>(self, error: __F) -> Self where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name #ty_generics> {
+						#error_name::with_chain(self, Self::from_kind(error().into()))
 					}
 				}
 
@@ -932,30 +949,43 @@ This struct is made of three things:
 						self.kind()
 					}
 
-					fn iter(&self) -> #error_chain_name::ErrorChainIter {
-						#error_chain_name::ErrorChainIter(Some(self))
+					fn iter(&self) -> #error_chain_name::Iter {
+						#error_chain_name::Iter::new(Some(self))
 					}
 
 					fn backtrace(&self) -> Option<&#error_chain_name::Backtrace> {
 						self.backtrace()
 					}
 
+					fn chain_err<__F, __EK>(self, error: __F) -> Self where __F: FnOnce() -> __EK, __EK: Into<Self::ErrorKind> {
+						self.chain_err(error)
+					}
+
 					#extract_backtrace_fn
 				}
 
-				/// Additional methods for `Result`, for easy interaction with this crate.
-				pub trait #result_ext_name #result_ext_impl_generics #where_clause {
+				/// Additional methods for `Result` and `Option`, for easy interaction with this crate.
+				pub trait #result_ext_name #result_ext_impl_generics_t #where_clause {
 					#[doc = #result_ext_chain_err_doc_comment]
 					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name #ty_generics>
 						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name #ty_generics>;
 				}
 
-				impl #result_ext_impl_generics #result_ext_name #result_ext_ty_generics for ::std::result::Result<__T, __E> #where_clause {
+				impl #result_ext_impl_generics_t_e #result_ext_name #result_ext_ty_generics_t for ::std::result::Result<__T, __E> #where_clause {
 					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name #ty_generics>
 						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name #ty_generics> {
 						self.map_err(move |e| {
 							let state = #error_chain_name::State::new::<#error_name #ty_generics>(Box::new(e));
 							#error_chain_name::ChainedError::new(callback().into(), state)
+						})
+					}
+				}
+
+				impl #result_ext_impl_generics_t #result_ext_name #result_ext_ty_generics_t for ::std::option::Option<__T> #where_clause {
+					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name #ty_generics>
+						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name #ty_generics> {
+						self.ok_or_else(move || {
+							#error_chain_name::ChainedError::from_kind(callback().into())
 						})
 					}
 				}

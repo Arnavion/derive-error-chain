@@ -5,5 +5,5 @@ authors = ["Arnavion <arnavion@gmail.com>"]
 publish = false
 
 [dependencies]
-error-chain = { version = "0.10.x", default-features = false }
+error-chain = { version = "0.11.x", default-features = false }
 derive-error-chain = { path = "../derive-error-chain" }

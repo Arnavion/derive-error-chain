@@ -13,7 +13,7 @@ fn main() {
 }
 
 fn macro_conflicts_use() {
-	use error_chain::{ bail, error_chain as error_chain_macro, error_chain_processed, error_chain_processing, impl_extract_backtrace, quick_error, quick_main };
+	use error_chain::{ bail, error_chain as error_chain_macro, error_chain_processing, impl_error_chain_kind, impl_error_chain_processed, impl_extract_backtrace, quick_main };
 
 	#[derive(Debug, ErrorChain)]
 	#[error_chain(result = "MyResult")]
@@ -46,7 +46,7 @@ fn macro_conflicts_use() {
 }
 
 fn macro_conflicts_fully_qualified() {
-	use error_chain::{ error_chain_processed, error_chain_processing, impl_extract_backtrace, quick_error };
+	use error_chain::{ error_chain_processing, impl_error_chain_kind, impl_error_chain_processed, impl_extract_backtrace };
 
 	#[derive(Debug, ErrorChain)]
 	#[error_chain(result = "MyResult")]
