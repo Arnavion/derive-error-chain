@@ -403,6 +403,10 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let mut has_msg = false;
 
 	for attr in ast.attrs {
+		if attr.name() == "doc" {
+			continue;
+		}
+
 		match attr.value {
 			syn::MetaItem::List(ident, nested_meta_items) => {
 				if ident != "error_chain" {
