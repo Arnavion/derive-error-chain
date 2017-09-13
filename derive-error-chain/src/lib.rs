@@ -75,7 +75,7 @@
 //! The less obvious differences are:
 //!
 //! - The ErrorKind must explicitly implement `::std::fmt::Debug`, either automatically using `#[derive]` or manually implemented separately. `error_chain!` does this implicitly.
-//! - The ErrorKind must have `pub` visibility. `error_chain!` does this implicitly.
+//! - Unlike `error_chain!`, the ErrorKind need not have `pub` visibility. The generated Error, Result and ResultExt will have the same visibility as the ErrorKind.
 //! - The ErrorKind can have a special `Msg(String)` member for converting strings to the ErrorKind. `error_chain!` does this implicitly.
 //! - Unlike `error-chain`, the `Msg(String)` member is optional. If absent, the ErrorKind and Error will not impl `From<String>` and `From<&str>`.
 //! - Doc comments, since they're effectively attributes, can be applied on the enum variants without any special syntax like `error_chain!` has.
@@ -357,6 +357,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let source = input.to_string();
 	let ast = syn::parse_derive_input(&source).unwrap();
 	let error_kind_name = ast.ident;
+	let error_kind_vis = ast.vis;
 
 	let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 	let mut generics_lifetime = ast.generics.clone();
@@ -820,7 +821,7 @@ This struct is made of three things:
 
 			let result_wrapper = result_name.map(|result_name| quote! {
 				/// Convenient wrapper around `::std::result::Result`
-				pub type #result_name #result_ty_generics = ::std::result::Result<__T, #error_name #ty_generics>;
+				#error_kind_vis type #result_name #result_ty_generics = ::std::result::Result<__T, #error_name #ty_generics>;
 			});
 
 			quote! {
@@ -851,7 +852,7 @@ This struct is made of three things:
 
 				#[doc = #error_doc_comment]
 				#[derive(Debug)]
-				pub struct #error_name #impl_generics (
+				#error_kind_vis struct #error_name #impl_generics (
 					/// The kind of the error.
 					pub #error_kind_name #ty_generics,
 
@@ -969,7 +970,7 @@ This struct is made of three things:
 				}
 
 				/// Additional methods for `Result` and `Option`, for easy interaction with this crate.
-				pub trait #result_ext_name #result_ext_impl_generics_t #where_clause {
+				#error_kind_vis trait #result_ext_name #result_ext_impl_generics_t #where_clause {
 					#[doc = #result_ext_chain_err_doc_comment]
 					fn chain_err<__F, __EK>(self, callback: __F) -> ::std::result::Result<__T, #error_name #ty_generics>
 						where __F: FnOnce() -> __EK, __EK: Into<#error_kind_name #ty_generics>;

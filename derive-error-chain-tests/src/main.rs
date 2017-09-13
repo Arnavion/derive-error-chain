@@ -551,3 +551,10 @@ fn macro_conflicts() {
 		},
 	}
 }
+
+mod need_not_be_pub {
+	#[derive(Debug, ErrorChain)]
+	enum ErrorKind {
+		Msg(String),
+	}
+}
