@@ -2,6 +2,14 @@
 
 //! Test crate for derive-error-chain. If it runs, it's tested.
 
+#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
+#![cfg_attr(feature = "cargo-clippy", allow(
+	missing_docs_in_private_items,
+	option_unwrap_used,
+	similar_names,
+	use_debug,
+))]
+
 #[macro_use]
 extern crate derive_error_chain;
 #[macro_use]
@@ -51,6 +59,7 @@ fn smoke_test_2() {
 	}
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(items_after_statements))]
 fn smoke_test_4() {
 	#[derive(Debug, ErrorChain)]
 	pub enum ErrorKind {
@@ -341,6 +350,7 @@ fn error_patterns() {
 	}
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(non_ascii_literal))]
 fn rewrapping() {
 	use std::env::VarError::{self, NotPresent, NotUnicode};
 
@@ -508,12 +518,14 @@ fn test_without_msg_2() {
 	}
 
 	// Should not conflict
+	#[cfg_attr(feature = "cargo-clippy", allow(fallible_impl_from))]
 	impl<'a> From<&'a str> for ErrorKind {
 		fn from(_: &'a str) -> Self {
 			unimplemented!()
 		}
 	}
 
+	#[cfg_attr(feature = "cargo-clippy", allow(fallible_impl_from))]
 	impl From<String> for ErrorKind {
 		fn from(_: String) -> Self {
 			unimplemented!()

@@ -3,6 +3,11 @@
 
 //! Test crate for derive-error-chain. If it runs, it's tested.
 
+#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
+#![cfg_attr(feature = "cargo-clippy", allow(
+	missing_docs_in_private_items,
+))]
+
 #[macro_use]
 extern crate derive_error_chain;
 extern crate error_chain;
