@@ -17,6 +17,7 @@ repository = "https://github.com/Arnavion/derive-error-chain"
 proc-macro2 = "0.2.x"
 quote = "0.4.x"
 syn = { version = "0.12.x", features = ["derive", "full", "printing"] }
+syntex_fmt_macros = "0.5.x"
 
 [lib]
 proc-macro = true

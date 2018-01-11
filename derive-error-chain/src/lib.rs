@@ -192,6 +192,18 @@
 //!         InvalidToolchainName(String),
 //!     ```
 //!
+//!     When the `proc_macro` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
+//!
+//!     ```ignore
+//!         // Tuple variants use `{0}`, `{1}`, and so on
+//!         #[error_chain(description = const("invalid toolchain name: '{0}'"))]
+//!         InvalidToolchainName(String),
+//!
+//!         // Struct variants use `{name_of_the_field}`
+//!         #[error_chain(description = const("invalid toolchain name: '{name}'"))]
+//!         InvalidToolchainName { name: String },
+//!     ```
+//!
 //! - `#[error_chain(display = "some_function_expression")]`
 //!
 //!     Specifies a function expression to be used to implement `::std::fmt::Display::fmt()` on the `ErrorKind` and generated `Error`
@@ -239,6 +251,18 @@
 //!     ```ignore
 //!         #[error_chain(display = invalid_toolchain_name_error_display)]
 //!         InvalidToolchainName(String),
+//!     ```
+//!
+//!     When the `proc_macro` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
+//!
+//!     ```ignore
+//!         // Tuple variants use `{0}`, `{1}`, and so on
+//!         #[error_chain(display = const("invalid toolchain name: '{0}'"))]
+//!         InvalidToolchainName(String),
+//!
+//!         // Struct variants use `{name_of_the_field}`
+//!         #[error_chain(display = const("invalid toolchain name: '{name}'"))]
+//!         InvalidToolchainName { name: String },
 //!     ```
 //!
 //! - `#[error_chain(cause = "some_function_expression")]`
@@ -396,6 +420,7 @@ extern crate proc_macro2;
 extern crate quote;
 #[macro_use]
 extern crate syn;
+extern crate syntex_fmt_macros;
 
 #[proc_macro_derive(ErrorChain, attributes(error_chain))]
 pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -770,8 +795,8 @@ struct Link {
 	variant_ident: syn::Ident,
 	variant_fields: syn::Fields,
 	link_type: LinkType,
-	custom_description: Option<syn::Expr>,
-	custom_display: Option<syn::Expr>,
+	custom_description: Option<CustomFormatter>,
+	custom_display: Option<CustomFormatter>,
 	custom_cause: Option<syn::Expr>,
 }
 
@@ -855,11 +880,11 @@ impl From<syn::Variant> for Link {
 									_ => panic!("Chainable link {} must be a tuple of one element (the chainable error kind).", variant_ident),
 								},
 
-								"description" => custom_description = Some(syn::parse_str(value).unwrap_or_else(|err|
-									panic!("Could not parse `description` attribute of member {} as an expression - {}", variant_ident, err))),
+								"description" => custom_description = Some(CustomFormatter::Expr(syn::parse_str(value).unwrap_or_else(|err|
+									panic!("Could not parse `description` attribute of member {} as an expression - {}", variant_ident, err)))),
 
-								"display" => custom_display = Some(syn::parse_str(value).unwrap_or_else(|err|
-									panic!("Could not parse `display` attribute of member {} as an expression - {}", variant_ident, err))),
+								"display" => custom_display = Some(CustomFormatter::Expr(syn::parse_str(value).unwrap_or_else(|err|
+									panic!("Could not parse `display` attribute of member {} as an expression - {}", variant_ident, err)))),
 
 								"cause" => custom_cause = Some(syn::parse_str(value).unwrap_or_else(|err|
 									panic!("Could not parse `cause` attribute of member {} as an expression - {}", variant_ident, err))),
@@ -920,11 +945,9 @@ impl From<syn::Variant> for Link {
 						_ => panic!("Chainable link {} must be a tuple of one element (the chainable error kind).", variant_ident),
 					},
 
-					"description" => custom_description = Some(syn::parse2(value).unwrap_or_else(|err|
-						panic!("Could not parse `description` attribute of member {} as an expression - {}", variant_ident, err))),
+					"description" => custom_description = Some(CustomFormatter::parse(value, "description", &variant_ident, &variant_fields)),
 
-					"display" => custom_display = Some(syn::parse2(value).unwrap_or_else(|err|
-						panic!("Could not parse `display` attribute of member {} as an expression - {}", variant_ident, err))),
+					"display" => custom_display = Some(CustomFormatter::parse(value, "display", &variant_ident, &variant_fields)),
 
 					"cause" => custom_cause = Some(syn::parse2(value).unwrap_or_else(|err|
 						panic!("Could not parse `cause` attribute of member {} as an expression - {}", variant_ident, err))),
@@ -959,24 +982,33 @@ impl Link {
 				#error_kind_name::#variant_ident(ref s) => s,
 			},
 
-			(Some(custom_description), &LinkType::Chainable(_, _)) |
-			(Some(custom_description), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
+			(Some(&CustomFormatter::FormatString { ref format_string, .. }), &LinkType::Chainable(_, _)) |
+			(Some(&CustomFormatter::FormatString { ref format_string, .. }), &LinkType::Foreign(_)) => quote! {
+				#error_kind_name::#variant_ident(_) => #format_string,
+			},
 
-
+			(Some(&CustomFormatter::Expr(ref custom_description)), &LinkType::Chainable(_, _)) |
+			(Some(&CustomFormatter::Expr(ref custom_description)), &LinkType::Foreign(_)) if is_closure(custom_description) => quote! {
 				#error_kind_name::#variant_ident(ref err) => {
 					#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 					{ (#custom_description)(err) }
 				},
 			},
 
-			(Some(custom_description), &LinkType::Chainable(_, _)) |
-			(Some(custom_description), &LinkType::Foreign(_)) => quote! {
+			(Some(&CustomFormatter::Expr(ref custom_description)), &LinkType::Chainable(_, _)) |
+			(Some(&CustomFormatter::Expr(ref custom_description)), &LinkType::Foreign(_)) => quote! {
 				#error_kind_name::#variant_ident(ref err) => #custom_description(err),
 			},
 
-			(Some(custom_description), &LinkType::Custom) => {
+			(Some(&CustomFormatter::FormatString { ref format_string, .. }), &LinkType::Custom) => {
+				let pattern = fields_pattern_ignore(&self.variant_fields);
 
+				quote! {
+					#error_kind_name::#variant_ident #pattern => #format_string,
+				}
+			},
 
+			(Some(&CustomFormatter::Expr(ref custom_description)), &LinkType::Custom) => {
 				let pattern = fields_pattern(&self.variant_fields);
 				let args = args(&self.variant_fields);
 
@@ -1024,34 +1056,41 @@ impl Link {
 				#error_kind_name::#variant_ident(ref s) => ::std::fmt::Display::fmt(s, f),
 			},
 
-			(Some(custom_display), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
+			(Some(&CustomFormatter::FormatString { ref format_string, ref pattern, ref args }), &LinkType::Chainable(_, _)) => quote! {
+				#error_kind_name::#variant_ident #pattern => write!(f, #format_string, #args),
+			},
 
-
+			(Some(&CustomFormatter::Expr(ref custom_display)), &LinkType::Chainable(_, _)) if is_closure(custom_display) => quote! {
 				#error_kind_name::#variant_ident(ref kind) => {
 					#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 					{ (#custom_display)(kind) }
 				},
 			},
 
-			(Some(custom_display), &LinkType::Chainable(_, _)) => quote! {
+			(Some(&CustomFormatter::Expr(ref custom_display)), &LinkType::Chainable(_, _)) => quote! {
 				#error_kind_name::#variant_ident(ref kind) => #custom_display(f, kind),
 			},
 
-			(Some(custom_display), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
+			(Some(&CustomFormatter::FormatString { ref format_string, ref pattern, ref args }), &LinkType::Foreign(_)) => quote! {
+				#error_kind_name::#variant_ident #pattern => write!(f, #format_string, #args),
+			},
 
-
+			(Some(&CustomFormatter::Expr(ref custom_display)), &LinkType::Foreign(_)) if is_closure(custom_display) => quote! {
 				#error_kind_name::#variant_ident(ref err) => {
 					#[cfg_attr(feature = "cargo-clippy", allow(redundant_closure_call))]
 					{ (#custom_display)(err) }
 				},
 			},
 
-			(Some(custom_display), &LinkType::Foreign(_)) => quote! {
+			(Some(&CustomFormatter::Expr(ref custom_display)), &LinkType::Foreign(_)) => quote! {
 				#error_kind_name::#variant_ident(ref err) => #custom_display(f, err),
 			},
 
-			(Some(custom_display), &LinkType::Custom) => {
+			(Some(&CustomFormatter::FormatString { ref format_string, ref pattern, ref args }), &LinkType::Custom) => quote! {
+				#error_kind_name::#variant_ident #pattern => write!(f, #format_string, #args),
+			},
 
+			(Some(&CustomFormatter::Expr(ref custom_display)), &LinkType::Custom) => {
 				let pattern = fields_pattern(&self.variant_fields);
 				let args = args(&self.variant_fields);
 
@@ -1216,6 +1255,123 @@ impl Link {
 	}
 }
 
+enum CustomFormatter {
+	FormatString { format_string: String, pattern: quote::Tokens, args: quote::Tokens },
+	Expr(syn::Expr),
+}
+
+impl CustomFormatter {
+	fn parse(tokens: proc_macro2::TokenStream, attr_name: &str, variant_ident: &syn::Ident, variant_fields: &syn::Fields) -> Self {
+		let err = match syn::parse(tokens.clone().into()) {
+			Ok(expr) => return CustomFormatter::Expr(expr),
+			Err(err) => err,
+		};
+
+		let mut tokens = tokens.into_iter();
+
+		match tokens.next() {
+			Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Term(ref term), .. }) if term.as_str() == "const" => (),
+
+			Some(tt) => panic!(
+				"Could not parse `{}` attribute of member {}. Expression - {}. Format string - expected `const` but got {}",
+				attr_name, variant_ident, err, tt),
+
+			_ => panic!(
+				"Could not parse `{}` attribute of member {}. Expression - {}. Format string - expected `const`",
+				attr_name, variant_ident, err),
+		}
+
+		let value = match tokens.next() {
+			Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Group(proc_macro2::Delimiter::Parenthesis, value), .. }) => value,
+
+			Some(tt) => panic!(
+				"Could not parse `{}` attribute of member {} - expected `(string literal)` but got {}",
+				attr_name, variant_ident, tt),
+
+			_ => panic!(
+				"Could not parse `{}` attribute of member {} - expected `(string literal)`",
+				attr_name, variant_ident),
+		};
+
+		let format_string = match syn::parse2(value) {
+			Ok(syn::Lit::Str(value)) => value.value(),
+
+			Ok(lit) => panic!(
+				"Could not parse `{}` attribute of member {} - expected string literal but got {}",
+				attr_name, variant_ident, quote!(#lit).to_string()),
+
+			Err(err) => panic!(
+				"Could not parse `{}` attribute of member {} - {}",
+				attr_name, variant_ident, err),
+		};
+
+		if let Some(tt) = tokens.next() {
+			panic!(
+				"Could not parse `{}` attribute of member {} - unexpected token {} after string literal",
+				attr_name, variant_ident, tt);
+		}
+
+		match *variant_fields {
+			syn::Fields::Named(syn::FieldsNamed { ref named, .. }) => {
+				let referenced_names = get_parameter_names(&format_string).unwrap_or_else(|err| panic!(
+					"Could not parse `{}` attribute of member {} - {}",
+					attr_name, variant_ident, err));
+
+				let (patterns, args): (Vec<_>, Vec<_>) = named.into_iter().map(|f| {
+					let field_name = f.ident.as_ref().unwrap();
+					if referenced_names.contains(field_name) {
+						(quote!(ref #field_name), quote!(#field_name = #field_name,))
+					}
+					else {
+						let ignored_field_name: syn::Ident = format!("_{}", field_name).into();
+						(quote!(#field_name: ref #ignored_field_name), quote!())
+					}
+				}).unzip();
+
+				CustomFormatter::FormatString {
+					format_string,
+					pattern: quote!({ #(#patterns,)* }),
+					args: quote!(#(#args)*),
+				}
+			},
+
+			syn::Fields::Unnamed(syn::FieldsUnnamed { ref unnamed, .. }) => {
+				let referenced_positions = get_parameter_positions(&format_string).unwrap_or_else(|err| panic!(
+					"Could not parse `{}` attribute of member {} - {}",
+					attr_name, variant_ident, err));
+
+				let (patterns, args): (Vec<_>, Vec<_>) = unnamed.into_iter().enumerate().map(|(i, _)| {
+					if referenced_positions.contains(&i) {
+						let field_name: syn::Ident = format!("value{}", i).into();
+						(quote!(ref #field_name), quote!(#field_name,))
+					}
+					else {
+						(quote!(_), quote!())
+					}
+				}).unzip();
+
+				CustomFormatter::FormatString {
+					format_string,
+					pattern: quote!((#(#patterns,)*)),
+					args: quote!(#(#args)*),
+				}
+			},
+
+			syn::Fields::Unit => {
+				ensure_no_parameters(&format_string).unwrap_or_else(|err| panic!(
+					"Could not parse `{}` attribute of member {} - {}",
+					attr_name, variant_ident, err));
+
+				CustomFormatter::FormatString {
+					format_string,
+					pattern: quote!(),
+					args: quote!(),
+				}
+			},
+		}
+	}
+}
+
 fn is_error_chain_attribute(attr: &syn::Attribute) -> bool {
 	if !attr.path.global() && attr.path.segments.len() == 1 {
 		let segment = &attr.path.segments[0];
@@ -1284,4 +1440,54 @@ fn args(variant_fields: &syn::Fields) -> quote::Tokens {
 
 		syn::Fields::Unit => quote!(),
 	}
+}
+
+fn get_parameter_names(format_string: &str) -> Result<std::collections::HashSet<syn::Ident>, String> {
+	let parser = syntex_fmt_macros::Parser::new(format_string);
+
+	parser
+	.filter_map(|piece| match piece {
+		syntex_fmt_macros::Piece::String(_) => None,
+
+		syntex_fmt_macros::Piece::NextArgument(syntex_fmt_macros::Argument { position, .. }) => match position {
+			syntex_fmt_macros::Position::ArgumentNext => Some(Err("expected named parameter but found `{}`".to_string())),
+			syntex_fmt_macros::Position::ArgumentIs(index) => Some(Err(format!("expected named parameter but found `{{{}}}`", index))),
+			syntex_fmt_macros::Position::ArgumentNamed(name) => Some(syn::parse_str(name).map_err(|err| format!("could not parse named parameter `{{{}}}` - {}", name, err))),
+		},
+	})
+	.collect()
+}
+
+fn get_parameter_positions(format_string: &str) -> Result<std::collections::HashSet<usize>, String> {
+	let parser = syntex_fmt_macros::Parser::new(format_string);
+
+	parser
+	.filter_map(|piece| match piece {
+		syntex_fmt_macros::Piece::String(_) => None,
+
+		syntex_fmt_macros::Piece::NextArgument(syntex_fmt_macros::Argument { position, .. }) => match position {
+			syntex_fmt_macros::Position::ArgumentNext => Some(Err("expected positional parameter but found `{}`".to_string())),
+			syntex_fmt_macros::Position::ArgumentIs(index) => Some(Ok(index)),
+			syntex_fmt_macros::Position::ArgumentNamed(name) => Some(Err(format!("expected positional parameter but found `{{{}}}`", name))),
+		},
+	})
+	.collect()
+}
+
+fn ensure_no_parameters(format_string: &str) -> Result<(), String> {
+	let parser = syntex_fmt_macros::Parser::new(format_string);
+
+	for piece in parser {
+		match piece {
+			syntex_fmt_macros::Piece::String(_) => (),
+
+			syntex_fmt_macros::Piece::NextArgument(syntex_fmt_macros::Argument { position, .. }) => match position {
+				syntex_fmt_macros::Position::ArgumentNext => return Err("expected no parameters but found `{}`".to_string()),
+				syntex_fmt_macros::Position::ArgumentIs(index) => return Err(format!("expected no parameters but found `{{{}}}`", index)),
+				syntex_fmt_macros::Position::ArgumentNamed(name) => return Err(format!("expected no parameters but found `{{{}}}`", name)),
+			},
+		}
+	}
+
+	Ok(())
 }

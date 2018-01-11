@@ -11,6 +11,8 @@ fn main() {
 	macro_conflicts_use();
 	macro_conflicts_fully_qualified();
 	lambda_description_and_display_and_cause();
+	const_format_string_tuple_variants();
+	const_format_string_struct_variants();
 }
 
 fn macro_conflicts_use() {
@@ -100,4 +102,62 @@ fn lambda_description_and_display_and_cause() {
 
 	let err: Error = ErrorKind::FileIO(::std::path::PathBuf::new(), ::std::io::Error::from_raw_os_error(1)).into();
 	assert!(::std::error::Error::cause(&err).is_some());
+}
+
+fn const_format_string_tuple_variants() {
+	mod test {
+		#[derive(Debug, ErrorChain)]
+		pub enum ErrorKind {
+			Msg(String),
+		}
+	}
+
+	#[derive(Debug, ErrorChain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(link = "test::Error")]
+		#[error_chain(description = const("Chainable's description"))]
+		#[error_chain(display = const("Chainable's display: {0}"))]
+		Chainable(test::ErrorKind),
+
+		#[error_chain(foreign)]
+		#[error_chain(description = const("Foreign's description"))]
+		#[error_chain(display = const("Foreign's display: {0}"))]
+		Foreign(::std::io::Error),
+
+		#[error_chain(custom)]
+		#[error_chain(description = const("Custom's description"))]
+		#[error_chain(display = const("Custom's display: {0}"))]
+		Custom(u32, u32),
+	}
+
+	let err: test::Error = "foo".into();
+	let err: Error = err.into();
+	assert_eq!("Chainable's description", ::std::error::Error::description(&err));
+	assert_eq!("Chainable's display: foo".to_string(), format!("{}", err));
+
+	let err: Error = ::std::io::Error::new(std::io::ErrorKind::NotFound, "abcde".to_string()).into();
+	assert_eq!("Foreign's description", ::std::error::Error::description(&err));
+	assert_eq!("Foreign's display: abcde".to_string(), format!("{}", err));
+
+	let err: Error = ErrorKind::Custom(5, 6).into();
+	assert_eq!("Custom's description", ::std::error::Error::description(&err));
+	assert_eq!("Custom's display: 5".to_string(), format!("{}", err));
+}
+
+fn const_format_string_struct_variants() {
+	#[derive(Debug, ErrorChain)]
+	pub enum ErrorKind {
+		Msg(String),
+
+		#[error_chain(custom)]
+		#[error_chain(description = const("Custom's description"))]
+		#[error_chain(display = const("Custom's display: {code}"))]
+		Custom { code: u32, extra: u32, },
+	}
+
+	let err: Error = (ErrorKind::Custom { code: 5, extra: 6, }).into();
+	assert_eq!("Custom's description", ::std::error::Error::description(&err));
+	assert_eq!("Custom's display: 5".to_string(), format!("{}", err));
 }
