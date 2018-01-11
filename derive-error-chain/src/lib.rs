@@ -535,6 +535,7 @@ This struct is made of three things:
 				impl #impl_generics #error_kind_name #ty_generics #where_clause {
 					/// A string describing the error kind.
 					pub fn description(&self) -> &str {
+						#[cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 						match *self {
 							#(#error_kind_description_cases)*
 						}
@@ -543,6 +544,7 @@ This struct is made of three things:
 
 				impl #impl_generics ::std::fmt::Display for #error_kind_name #ty_generics #where_clause {
 					fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+						#[cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 						match *self {
 							#(#error_kind_display_cases)*
 						}
@@ -609,6 +611,7 @@ This struct is made of three things:
 					fn description(&self) -> &str { self.0.description() }
 
 					fn cause(&self) -> Option<&::std::error::Error> {
+						#[cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 						match self.1.next_error {
 							Some(ref c) => Some(&**c),
 							None => match self.0 {
