@@ -113,6 +113,13 @@
 //!     A chainable link is an error and errorkind that have been generated using `error-chain` or `derive-error-chain`. The variant must have a single field
 //!     to hold the chained errorkind, and the `link` attribute must specify a path to the chained error.
 //!
+//!     When the `proc_macro` feature is enabled, the value of the `link` attribute does not need to be stringified:
+//!
+//!     ```ignore
+//!     #[error_chain(link = other_error::Error)]
+//!     Another(other_error::ErrorKind),
+//!     ```
+//!
 //! - Foreign links
 //!
 //!     ```ignore
@@ -173,6 +180,18 @@
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::description()`
 //!     - Custom links: Returns the stringified name of the variant.
 //!
+//!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
+//!
+//!     ```ignore
+//!         #[error_chain(description = |_| "invalid toolchain name")]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
+//!     ```ignore
+//!         #[error_chain(description = invalid_toolchain_name_error_description)]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
 //! - `#[error_chain(display = "some_function_expression")]`
 //!
 //!     Specifies a function expression to be used to implement `::std::fmt::Display::fmt()` on the `ErrorKind` and generated `Error`
@@ -210,6 +229,18 @@
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::fmt::Display::fmt()`
 //!     - Custom links: Writes the description of the variant to the formatter.
 //!
+//!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
+//!
+//!     ```ignore
+//!         #[error_chain(display = |t| write!(f, "invalid toolchain name: '{}'", t))]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
+//!     ```ignore
+//!         #[error_chain(display = invalid_toolchain_name_error_display)]
+//!         InvalidToolchainName(String),
+//!     ```
+//!
 //! - `#[error_chain(cause = "some_function_expression")]`
 //!
 //!     Specifies a function expression to be used to implement `::std::fmt::Error::cause()` on the generated `Error`
@@ -245,6 +276,18 @@
 //!     - Chainable links: Returns `None`
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::cause()`
 //!     - Custom links: Returns `None`
+//!
+//!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
+//!
+//!     ```ignore
+//!         #[error_chain(cause = |_, err| err)]
+//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
+//!
+//!     ```ignore
+//!         #[error_chain(cause = parse_json_file_error_cause)]
+//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
 //!
 //! # Conflicts with `error-chain` macros when the `proc_macro` feature is enabled
 //!
@@ -832,7 +875,64 @@ impl From<syn::Variant> for Link {
 				}
 			}
 			else {
-				panic!("Could not parse `error_chain` attribute of member {} - expected term or name-value meta item", variant_ident);
+				let mut tts_iter = {
+					let mut tts_iter = attr.tts.into_iter();
+
+					let tts = match tts_iter.next() {
+						Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Group(proc_macro2::Delimiter::Parenthesis, tts), .. }) => tts,
+						Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected `(tokens)` but found {}", variant_ident, tt),
+						None => panic!("Could not parse `error_chain` attribute of member {} - expected `(tokens)`", variant_ident),
+					};
+
+					if let Some(tt) = tts_iter.next() {
+						panic!("Could not parse `error_chain` attribute of member {} - unexpected token {} after `(tokens)`", variant_ident, tt);
+					}
+
+					tts.into_iter()
+				};
+
+				let ident = match tts_iter.next() {
+					Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Term(ident), .. }) => ident,
+					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected a term but got {}", variant_ident, tt),
+					None => panic!("Could not parse `error_chain` attribute of member {} - expected a term", variant_ident),
+				};
+				let ident = ident.as_str();
+
+				match tts_iter.next() {
+					Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Op('=', _), .. }) => (),
+					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected `=` but got {}", variant_ident, tt),
+					None => panic!("Could not parse `error_chain` attribute of member {} - expected `=`", variant_ident),
+				}
+
+				let value: proc_macro2::TokenStream = tts_iter.collect();
+				if value.is_empty() {
+					panic!("Could not parse `error_chain` attribute of member {} - expected tokens after `=`", variant_ident);
+				}
+
+				match ident {
+					"link" => match variant_fields {
+						syn::Fields::Unnamed(syn::FieldsUnnamed { ref unnamed, .. }) if unnamed.len() == 1 =>
+							link_type = Some(LinkType::Chainable(
+								syn::parse2(value).unwrap_or_else(|err|
+									panic!("Could not parse `link` attribute of member {} as a type - {}", variant_ident, err)),
+								unnamed[0].ty.clone())),
+
+						_ => panic!("Chainable link {} must be a tuple of one element (the chainable error kind).", variant_ident),
+					},
+
+					"description" => custom_description = Some(syn::parse2(value).unwrap_or_else(|err|
+						panic!("Could not parse `description` attribute of member {} as an expression - {}", variant_ident, err))),
+
+					"display" => custom_display = Some(syn::parse2(value).unwrap_or_else(|err|
+						panic!("Could not parse `display` attribute of member {} as an expression - {}", variant_ident, err))),
+
+					"cause" => custom_cause = Some(syn::parse2(value).unwrap_or_else(|err|
+						panic!("Could not parse `cause` attribute of member {} as an expression - {}", variant_ident, err))),
+
+					_ => panic!(
+						"Could not parse `error_chain` attribute of member {} - expected one of `link`, `description`, `display`, `cause` but got {}",
+						variant_ident, ident),
+				}
 			}
 		}
 
