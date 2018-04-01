@@ -132,7 +132,7 @@ fn const_format_string_tuple_variants() {
 		Foreign(::std::io::Error),
 
 		#[error_chain(custom)]
-		#[error_chain(description = const("Custom's description"))]
+		#[error_chain(description = const("Custom's description: {0}"))]
 		#[error_chain(display = const("Custom's display: {0}"))]
 		Custom(u32, u32),
 	}
@@ -147,7 +147,8 @@ fn const_format_string_tuple_variants() {
 	assert_eq!("Foreign's display: abcde".to_string(), format!("{}", err));
 
 	let err: Error = ErrorKind::Custom(5, 6).into();
-	assert_eq!("Custom's description", ::std::error::Error::description(&err));
+	// No parameter substitution for `const()` description since it must be `&str`
+	assert_eq!("Custom's description: {0}", ::std::error::Error::description(&err));
 	assert_eq!("Custom's display: 5".to_string(), format!("{}", err));
 }
 
@@ -157,12 +158,13 @@ fn const_format_string_struct_variants() {
 		Msg(String),
 
 		#[error_chain(custom)]
-		#[error_chain(description = const("Custom's description"))]
+		#[error_chain(description = const("Custom's description: {code}"))]
 		#[error_chain(display = const("Custom's display: {code}"))]
 		Custom { code: u32, extra: u32, },
 	}
 
 	let err: Error = (ErrorKind::Custom { code: 5, extra: 6, }).into();
-	assert_eq!("Custom's description", ::std::error::Error::description(&err));
+	// No parameter substitution for `const()` description since it must be `&str`
+	assert_eq!("Custom's description: {code}", ::std::error::Error::description(&err));
 	assert_eq!("Custom's display: 5".to_string(), format!("{}", err));
 }

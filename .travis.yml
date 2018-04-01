@@ -4,20 +4,10 @@ rust:
 - beta
 - nightly
 
-env:
-- CRATE=derive-error-chain-tests
-- CRATE=derive-error-chain-tests-no-backtrace
-- CRATE=derive-error-chain-tests-nightly
-
-matrix:
-  allow_failures:
-  - rust: nightly
-  exclude:
-  - rust: stable
-    env: CRATE=derive-error-chain-tests-nightly
-  - rust: beta
-    env: CRATE=derive-error-chain-tests-nightly
-
-script: cd $CRATE && cargo build --verbose && cargo run
+script:
+- (if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]]; then cd derive-error-chain && cargo test --verbose; fi)
+- (cd derive-error-chain-tests && cargo run --verbose)
+- (cd derive-error-chain-tests-no-backtrace && cargo run --verbose)
+- (if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]]; then cd derive-error-chain-tests-nightly && cargo run --verbose; else echo 'Skipping nightly-only test'; fi)
 
 sudo: false

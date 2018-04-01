@@ -11,7 +11,9 @@
 //!
 //! The `error-chain` example
 //!
-//! ```ignore
+//! ```
+//! # #[macro_use] extern crate error_chain;
+//! #
 //! mod other_error {
 //!     error_chain! {}
 //! }
@@ -41,15 +43,18 @@
 //!
 //! becomes
 //!
-//! ```ignore
+//! ```
+//! # #[macro_use] extern crate derive_error_chain;
+//! # #[macro_use] extern crate error_chain;
+//! #
 //! mod other_error {
-//!     #[derive(Debug, ErrorChain]
+//!     #[derive(Debug, ErrorChain)]
 //!     pub enum ErrorKind {
 //!         Msg(String),
 //!     }
 //! }
 //!
-//! #[derive(Debug, ErrorChain]
+//! #[derive(Debug, ErrorChain)]
 //! pub enum ErrorKind {
 //!     Msg(String),
 //!
@@ -112,9 +117,21 @@
 //!
 //! - Chainable links
 //!
-//!     ```ignore
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # mod other_error {
+//!     #     #[derive(Debug, ErrorChain)]
+//!     #     pub enum ErrorKind {
+//!     #         Msg(String),
+//!     #     }
+//!     # }
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
 //!     #[error_chain(link = "other_error::Error")]
 //!     Another(other_error::ErrorKind),
+//!     # }
 //!     ```
 //!
 //!     A chainable link is an error and errorkind that have been generated using `error-chain` or `derive-error-chain`. The variant must have a single field
@@ -122,16 +139,35 @@
 //!
 //!     When the `proc_macro` feature is enabled, the value of the `link` attribute does not need to be stringified:
 //!
-//!     ```ignore
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # mod other_error {
+//!     #     #[derive(Debug, ErrorChain)]
+//!     #     pub enum ErrorKind {
+//!     #         Msg(String),
+//!     #     }
+//!     # }
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
 //!     #[error_chain(link = other_error::Error)]
 //!     Another(other_error::ErrorKind),
+//!     # }
 //!     ```
 //!
 //! - Foreign links
 //!
-//!     ```ignore
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
 //!     #[error_chain(foreign)]
 //!     Fmt(::std::fmt::Error),
+//!     # }
 //!     ```
 //!
 //!     A foreign link is an error that implements `::std::error::Error` but otherwise does not follow `error-chain`'s conventions. The variant must have
@@ -139,9 +175,14 @@
 //!
 //! - Custom links
 //!
-//!     ```ignore
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
 //!     #[error_chain(custom)]
 //!     InvalidToolchainName(String),
+//!     # }
 //!     ```
 //!
 //!     A custom link is an arbitrary variant that can hold any members.
@@ -157,16 +198,28 @@
 //!
 //!     This can be an inline lambda:
 //!
-//!     ```ignore
-//!         #[error_chain(description = r#"|_| "invalid toolchain name""#)]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(description = r#"|_| "invalid toolchain name""#)]
+//!     InvalidToolchainName(String),
+//!     # }
 //!     ```
 //!
 //!     or it can be a separate function:
 //!
-//!     ```ignore
-//!         #[error_chain(description = "invalid_toolchain_name_error_description")]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(description = "invalid_toolchain_name_error_description")]
+//!     InvalidToolchainName(String),
+//!     # }
 //!
 //!     // <snip>
 //!
@@ -189,26 +242,49 @@
 //!
 //!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
 //!
-//!     ```ignore
-//!         #[error_chain(description = |_| "invalid toolchain name")]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(description = |_| "invalid toolchain name")]
+//!     InvalidToolchainName(String),
+//!     # }
 //!     ```
 //!
-//!     ```ignore
-//!         #[error_chain(description = invalid_toolchain_name_error_description)]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(description = invalid_toolchain_name_error_description)]
+//!     InvalidToolchainName(String),
+//!     # }
+//!     #
+//!     # fn invalid_toolchain_name_error_description(_: &str) -> &str {
+//!     #     "invalid toolchain name"
+//!     # }
 //!     ```
 //!
 //!     When the `proc_macro` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
 //!
-//!     ```ignore
-//!         // Tuple variants use `{0}`, `{1}`, and so on
-//!         #[error_chain(description = const("invalid toolchain name: '{0}'"))]
-//!         InvalidToolchainName(String),
-//!
-//!         // Struct variants use `{name_of_the_field}`
-//!         #[error_chain(description = const("invalid toolchain name: '{name}'"))]
-//!         InvalidToolchainName { name: String },
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(description = const("invalid toolchain name"))]
+//!     InvalidToolchainName(String),
+//!     # }
 //!     ```
 //!
 //! - `#[error_chain(display = "some_function_expression")]`
@@ -217,16 +293,28 @@
 //!
 //!     This can be an inline lambda:
 //!
-//!     ```ignore
-//!         #[error_chain(display = r#"|t| write!(f, "invalid toolchain name: '{}'", t)"#)]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(display = r#"|t| write!(f, "invalid toolchain name: '{}'", t)"#)]
+//!     InvalidToolchainName(String),
+//!     # }
 //!     ```
 //!
 //!     or it can be a separate function:
 //!
-//!     ```ignore
-//!         #[error_chain(display = "invalid_toolchain_name_error_display")]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(display = "invalid_toolchain_name_error_display")]
+//!     InvalidToolchainName(String),
+//!     # }
 //!
 //!     // <snip>
 //!
@@ -250,26 +338,64 @@
 //!
 //!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
 //!
-//!     ```ignore
-//!         #[error_chain(display = |t| write!(f, "invalid toolchain name: '{}'", t))]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(display = |t| write!(f, "invalid toolchain name: '{}'", t))]
+//!     InvalidToolchainName(String),
+//!     # }
 //!     ```
 //!
-//!     ```ignore
-//!         #[error_chain(display = invalid_toolchain_name_error_display)]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(display = invalid_toolchain_name_error_display)]
+//!     InvalidToolchainName(String),
+//!     # }
+//!     #
+//!     # fn invalid_toolchain_name_error_display(f: &mut ::std::fmt::Formatter, t: &str) -> ::std::fmt::Result {
+//!     #     write!(f, "invalid toolchain name: '{}'", t)
+//!     # }
 //!     ```
 //!
 //!     When the `proc_macro` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
 //!
-//!     ```ignore
-//!         // Tuple variants use `{0}`, `{1}`, and so on
-//!         #[error_chain(display = const("invalid toolchain name: '{0}'"))]
-//!         InvalidToolchainName(String),
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!     // Tuple variants use `{0}`, `{1}`, and so on
+//!         # #[error_chain(custom)]
+//!     #[error_chain(display = const("invalid toolchain name: '{0}'"))]
+//!     InvalidToolchainName(String),
+//!     # }
+//!     ```
 //!
-//!         // Struct variants use `{name_of_the_field}`
-//!         #[error_chain(display = const("invalid toolchain name: '{name}'"))]
-//!         InvalidToolchainName { name: String },
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!     // Struct variants use `{name_of_the_field}`
+//!         # #[error_chain(custom)]
+//!     #[error_chain(display = const("invalid toolchain name: '{name}'"))]
+//!     InvalidToolchainName { name: String },
+//!     # }
 //!     ```
 //!
 //! - `#[error_chain(cause = "some_function_expression")]`
@@ -278,20 +404,32 @@
 //!
 //!     This can be an inline lambda:
 //!
-//!     ```ignore
-//!         #[error_chain(cause = "|_, err| err")]
-//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(cause = "|_, err| err")]
+//!     Io(::std::path::PathBuf, ::std::io::Error),
+//!     # }
 //!     ```
 //!
 //!     or it can be a separate function:
 //!
-//!     ```ignore
-//!         #[error_chain(cause = "parse_json_file_error_cause")]
-//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(cause = "parse_file_error_cause")]
+//!     Io(::std::path::PathBuf, ::std::io::Error),
+//!     # }
 //!
 //!     // <snip>
 //!
-//!     fn parse_json_file_error_cause<'a>(_: &::std::path::Path, err: &'a ::serde_json::Error) -> &'a ::std::error::Error {
+//!     fn parse_file_error_cause<'a>(_: &::std::path::Path, err: &'a ::std::io::Error) -> &'a ::std::error::Error {
 //!         err
 //!     }
 //!     ```
@@ -299,8 +437,8 @@
 //!     The function expression must have the signature `(...) -> &::std::error::Error`. It should have one parameter for each field of the variant.
 //!     The fields are passed in by reference. The result is wrapped in `Option::Some()` for returning from `::std::error::Error::cause()`
 //!
-//!     Thus in the above example, since `JSON` had two fields of type `::std::path::PathBuf` and `::serde_json::Error`, the function expression needed to be of type
-//!     `(&::std::path::Path, &::serde_json::Error) -> &::std::error::Error`
+//!     Thus in the above example, since `Io` had two fields of type `::std::path::PathBuf` and `::std::io::Error`, the function expression needed to be of type
+//!     `(&::std::path::Path, &::std::io::Error) -> &::std::error::Error`
 //!
 //!     If not specified, the default implementation of `::std::error::Error::cause()` behaves in this way:
 //!
@@ -310,46 +448,64 @@
 //!
 //!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
 //!
-//!     ```ignore
-//!         #[error_chain(cause = |_, err| err)]
-//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(cause = |_, err| err)]
+//!     Io(::std::path::PathBuf, ::std::io::Error),
+//!     # }
 //!     ```
 //!
-//!     ```ignore
-//!         #[error_chain(cause = parse_json_file_error_cause)]
-//!         JSON(::std::path::PathBuf, ::serde_json::Error),
+//!     ```
+//!     # #![feature(proc_macro)]
+//!     #
+//!     # #[macro_use] extern crate derive_error_chain;
+//!     #
+//!     # #[derive(Debug, ErrorChain)]
+//!     # pub enum ErrorKind {
+//!         # #[error_chain(custom)]
+//!     #[error_chain(cause = parse_file_error_cause)]
+//!     Io(::std::path::PathBuf, ::std::io::Error),
+//!     # }
+//!     #
+//!     # fn parse_file_error_cause<'a>(_: &::std::path::Path, err: &'a ::std::io::Error) -> &'a ::std::error::Error {
+//!     #     err
+//!     # }
 //!     ```
 //!
 //! # Conflicts with `error-chain` macros when the `proc_macro` feature is enabled
 //!
 //! If you have the `proc_macro` feature enabled and have code like this:
 //!
-//! ```ignore
+//! ```compile_fail
 //! #![feature(proc_macro)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
 //! #[macro_use] extern crate error_chain; // Want to use `bail!` and `quick_main!`
 //!
 //! #[derive(Debug, ErrorChain)]
+//! #[error_chain(result = "MyResult")]
 //! enum ErrorKind {
 //!     Msg(String),
-//!
-//!     #[error_chain(custom)]
-//!     Code(i32),
 //! }
 //!
-//! quick_main!(|| -> Result<()> {
+//! quick_main!(|| -> MyResult<()> {
 //!     bail!("failed");
 //! });
 //! ```
 //!
 //! it'll fail to compile with:
 //!
-//! ```ignore
+//! ```text,ignore
 //! error: macro `error_chain` may not be used in attributes
 //! ```
 //!
-//! This is because the compiler thinks `#[error_chain(custom)]` is the invocation of an attribute macro, notices that `error_chain!` is
+//! This is because the compiler thinks `#[error_chain(result = "MyResult")]` is the invocation of an attribute macro, notices that `error_chain!` is
 //! a `macro_rules` macro brought into scope from the `error-chain` crate, and thus complains that a `macro_rules` macro cannot be used as
 //! an attribute macro. It does this even though there is no attribute macro named `error_chain` and that the custom derive from this crate
 //! has registered `error_chain` as an attribute it supports.
@@ -358,7 +514,7 @@
 //!
 //! To work around this, don't use `#[macro_use]` with the `error-chain` crate. Instead, either `use` the macros you need from it:
 //!
-//! ```ignore
+//! ```
 //! #![feature(proc_macro)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
@@ -367,44 +523,51 @@
 //! use error_chain::{ bail, quick_main };
 //!
 //! #[derive(Debug, ErrorChain)]
+//! #[error_chain(result = "MyResult")]
 //! enum ErrorKind {
 //!     Msg(String),
-//!
-//!     #[error_chain(custom)]
-//!     Code(i32),
 //! }
 //!
-//! quick_main!(|| -> Result<()> {
-//!     bail!("failed")
+//! quick_main!(|| -> MyResult<()> {
+//!     bail!("failed");
 //! });
 //! ```
 //!
 //! or fully qualify their paths:
 //!
-//! ```ignore
+//! ```
 //! #![feature(proc_macro)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
 //! extern crate error_chain;
 //!
 //! #[derive(Debug, ErrorChain)]
+//! #[error_chain(result = "MyResult")]
 //! enum ErrorKind {
 //!     Msg(String),
-//!
-//!     #[error_chain(custom)]
-//!     Code(i32),
 //! }
 //!
-//! error_chain::quick_main!(|| -> Result<()> {
-//!     error_chain::bail!("failed")
+//! error_chain::quick_main!(|| -> MyResult<()> {
+//!     error_chain::bail!("failed");
 //! });
 //! ```
 //!
 //! `use`ing the `error_chain!` macro itself is more complicated: it must be renamed so that it doesn't just cause the above error again,
 //! and other macros it uses must also be imported, even though they're an implementation detail:
 //!
-//! ```ignore
+//! ```
+//! #![feature(proc_macro)]
+//!
+//! #[macro_use] extern crate derive_error_chain;
+//! extern crate error_chain;
+//!
 //! use error_chain::{ error_chain as error_chain_macro, error_chain_processing, impl_error_chain_kind, impl_error_chain_processed, impl_extract_backtrace };
+//!
+//! #[derive(Debug, ErrorChain)]
+//! #[error_chain(error = "MyError", result = "MyResult", result_ext = "MyResultExt")]
+//! enum MyErrorKind {
+//!     Msg(String),
+//! }
 //!
 //! error_chain_macro! {
 //! }
@@ -412,8 +575,19 @@
 //!
 //! To use it fully-qualified, the macros it depends on must still be `use`d to bring them into scope:
 //!
-//! ```ignore
+//! ```
+//! #![feature(proc_macro)]
+//!
+//! #[macro_use] extern crate derive_error_chain;
+//! extern crate error_chain;
+//!
 //! use error_chain::{ error_chain_processing, impl_error_chain_kind, impl_error_chain_processed, impl_extract_backtrace };
+//!
+//! #[derive(Debug, ErrorChain)]
+//! #[error_chain(error = "MyError", result = "MyResult", result_ext = "MyResultExt")]
+//! enum MyErrorKind {
+//!     Msg(String),
+//! }
 //!
 //! error_chain::error_chain! {
 //! }

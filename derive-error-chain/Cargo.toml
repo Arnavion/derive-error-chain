@@ -19,5 +19,8 @@ quote = "0.5.x"
 syn = { version = "0.13.x", features = ["derive", "full", "printing"] }
 syntex_fmt_macros = "0.5.x"
 
+[dev-dependencies]
+error-chain = "0.11.x"
+
 [lib]
 proc-macro = true
