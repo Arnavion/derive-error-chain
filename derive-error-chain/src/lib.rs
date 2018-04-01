@@ -907,7 +907,7 @@ impl From<syn::Variant> for Link {
 					let mut tts_iter = attr.tts.into_iter();
 
 					let tts = match tts_iter.next() {
-						Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Group(proc_macro2::Delimiter::Parenthesis, tts), .. }) => tts,
+						Some(proc_macro2::TokenTree::Group(ref group)) if group.delimiter() == proc_macro2::Delimiter::Parenthesis => group.stream(),
 						Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected `(tokens)` but found {}", variant_ident, tt),
 						None => panic!("Could not parse `error_chain` attribute of member {} - expected `(tokens)`", variant_ident),
 					};
@@ -920,14 +920,14 @@ impl From<syn::Variant> for Link {
 				};
 
 				let ident = match tts_iter.next() {
-					Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Term(ident), .. }) => ident,
+					Some(proc_macro2::TokenTree::Term(ident)) => ident,
 					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected a term but got {}", variant_ident, tt),
 					None => panic!("Could not parse `error_chain` attribute of member {} - expected a term", variant_ident),
 				};
 				let ident = ident.as_str();
 
 				match tts_iter.next() {
-					Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Op('=', _), .. }) => (),
+					Some(proc_macro2::TokenTree::Op(op)) if op.op() == '=' => (),
 					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected `=` but got {}", variant_ident, tt),
 					None => panic!("Could not parse `error_chain` attribute of member {} - expected `=`", variant_ident),
 				}
@@ -1273,7 +1273,7 @@ impl CustomFormatter {
 		let mut tokens = tokens.into_iter();
 
 		match tokens.next() {
-			Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Term(ref term), .. }) if term.as_str() == "const" => (),
+			Some(proc_macro2::TokenTree::Term(term)) if term.as_str() == "const" => (),
 
 			Some(tt) => panic!(
 				"Could not parse `{}` attribute of member {}. Expression - {}. Format string - expected `const` but got {}",
@@ -1285,7 +1285,7 @@ impl CustomFormatter {
 		}
 
 		let value = match tokens.next() {
-			Some(proc_macro2::TokenTree { kind: proc_macro2::TokenNode::Group(proc_macro2::Delimiter::Parenthesis, value), .. }) => value,
+			Some(proc_macro2::TokenTree::Group(ref group)) if group.delimiter() == proc_macro2::Delimiter::Parenthesis => group.stream(),
 
 			Some(tt) => panic!(
 				"Could not parse `{}` attribute of member {} - expected `(string literal)` but got {}",
