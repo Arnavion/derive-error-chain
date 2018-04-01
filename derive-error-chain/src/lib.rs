@@ -1,8 +1,15 @@
 #![recursion_limit = "300"]
 
-//! A Macros 1.1 implementation of https://crates.io/crates/error-chain
+#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
+#![cfg_attr(feature = "cargo-clippy", allow(
+	large_enum_variant,
+	too_many_arguments,
+	use_self,
+))]
+
+//! A Macros 1.1 implementation of <https://crates.io/crates/error-chain>
 //!
-//! The error-chain example
+//! The `error-chain` example
 //!
 //! ```ignore
 //! mod other_error {
@@ -66,7 +73,7 @@
 //!
 //! So the obvious differences from `error_chain!` are:
 //!
-//! - The ErrorKind is an enum instead of a macro invocation.
+//! - The `ErrorKind` is an enum instead of a macro invocation.
 //! - Error links are variants of the enum instead of lines inside the macro.
 //! - Links have explicit annotations marking them as chainable / foreign / custom instead of being grouped into corresponding sections of the macro.
 //! - Attributes like `#[cfg]` are applied to the variants directly instead of needing special syntax.
@@ -74,12 +81,12 @@
 //!
 //! The less obvious differences are:
 //!
-//! - The ErrorKind must explicitly implement `::std::fmt::Debug`, either automatically using `#[derive]` or manually implemented separately. `error_chain!` does this implicitly.
-//! - Unlike `error_chain!`, the ErrorKind need not have `pub` visibility. The generated Error, Result and ResultExt will have the same visibility as the ErrorKind.
-//! - The ErrorKind can have a special `Msg(String)` member for converting strings to the ErrorKind. `error_chain!` does this implicitly.
-//! - Unlike `error-chain`, the `Msg(String)` member is optional. If absent, the ErrorKind and Error will not impl `From<String>` and `From<&str>`.
+//! - The `ErrorKind` must explicitly implement `::std::fmt::Debug`, either automatically using `#[derive]` or manually implemented separately. `error_chain!` does this implicitly.
+//! - Unlike `error_chain!`, the `ErrorKind` need not have `pub` visibility. The generated `Error`, `Result` and `ResultExt` will have the same visibility as the `ErrorKind`.
+//! - The `ErrorKind` can have a special `Msg(String)` member for converting strings to the `ErrorKind`. `error_chain!` does this implicitly.
+//! - Unlike `error-chain`, the `Msg(String)` member is optional. If absent, the `ErrorKind` and `Error` will not impl `From<String>` and `From<&str>`.
 //! - Doc comments, since they're effectively attributes, can be applied on the enum variants without any special syntax like `error_chain!` has.
-//! - The ErrorKind can be generic.
+//! - The `ErrorKind` can be generic.
 //!
 //! # Enum attributes
 //!
@@ -347,7 +354,7 @@
 //! an attribute macro. It does this even though there is no attribute macro named `error_chain` and that the custom derive from this crate
 //! has registered `error_chain` as an attribute it supports.
 //!
-//! See https://github.com/rust-lang/rust/issues/38356#issuecomment-324277403 for the discussion.
+//! See <https://github.com/rust-lang/rust/issues/38356#issuecomment-324277403> for the discussion.
 //!
 //! To work around this, don't use `#[macro_use]` with the `error-chain` crate. Instead, either `use` the macros you need from it:
 //!
@@ -447,8 +454,8 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let generics: std::collections::HashSet<_> =
 		ast.generics.params.iter()
 		.filter_map(|param|
-			if let syn::GenericParam::Type(syn::TypeParam { ref ident, .. }) = *param {
-				Some(ident.clone())
+			if let syn::GenericParam::Type(syn::TypeParam { ident, .. }) = *param {
+				Some(ident)
 			}
 			else {
 				None
@@ -903,36 +910,36 @@ impl From<syn::Variant> for Link {
 				}
 			}
 			else {
-				let mut tts_iter = {
-					let mut tts_iter = attr.tts.into_iter();
+				let mut tts = {
+					let mut tts = attr.tts.into_iter();
 
-					let tts = match tts_iter.next() {
+					let tt = match tts.next() {
 						Some(proc_macro2::TokenTree::Group(ref group)) if group.delimiter() == proc_macro2::Delimiter::Parenthesis => group.stream(),
 						Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected `(tokens)` but found {}", variant_ident, tt),
 						None => panic!("Could not parse `error_chain` attribute of member {} - expected `(tokens)`", variant_ident),
 					};
 
-					if let Some(tt) = tts_iter.next() {
+					if let Some(tt) = tts.next() {
 						panic!("Could not parse `error_chain` attribute of member {} - unexpected token {} after `(tokens)`", variant_ident, tt);
 					}
 
-					tts.into_iter()
+					tt.into_iter()
 				};
 
-				let ident = match tts_iter.next() {
+				let ident = match tts.next() {
 					Some(proc_macro2::TokenTree::Term(ident)) => ident,
 					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected a term but got {}", variant_ident, tt),
 					None => panic!("Could not parse `error_chain` attribute of member {} - expected a term", variant_ident),
 				};
 				let ident = ident.as_str();
 
-				match tts_iter.next() {
+				match tts.next() {
 					Some(proc_macro2::TokenTree::Op(op)) if op.op() == '=' => (),
 					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected `=` but got {}", variant_ident, tt),
 					None => panic!("Could not parse `error_chain` attribute of member {} - expected `=`", variant_ident),
 				}
 
-				let value: proc_macro2::TokenStream = tts_iter.collect();
+				let value: proc_macro2::TokenStream = tts.collect();
 				if value.is_empty() {
 					panic!("Could not parse `error_chain` attribute of member {} - expected tokens after `=`", variant_ident);
 				}
@@ -1167,10 +1174,11 @@ impl Link {
 	) -> Option<quote::Tokens> {
 		let variant_ident = &self.variant_ident;
 
+		#[cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
 		match (self.custom_cause.as_ref(), &self.link_type) {
 			(_, &LinkType::Msg) => None,
 
-			(Some(ref custom_cause), _) => Some({
+			(Some(custom_cause), _) => Some({
 				let pattern = fields_pattern(&self.variant_fields);
 				let args = args(&self.variant_fields);
 
@@ -1270,9 +1278,9 @@ impl CustomFormatter {
 			Err(err) => err,
 		};
 
-		let mut tokens = tokens.into_iter();
+		let mut tts = tokens.into_iter();
 
-		match tokens.next() {
+		match tts.next() {
 			Some(proc_macro2::TokenTree::Term(term)) if term.as_str() == "const" => (),
 
 			Some(tt) => panic!(
@@ -1284,7 +1292,7 @@ impl CustomFormatter {
 				attr_name, variant_ident, err),
 		}
 
-		let value = match tokens.next() {
+		let value = match tts.next() {
 			Some(proc_macro2::TokenTree::Group(ref group)) if group.delimiter() == proc_macro2::Delimiter::Parenthesis => group.stream(),
 
 			Some(tt) => panic!(
@@ -1308,7 +1316,7 @@ impl CustomFormatter {
 				attr_name, variant_ident, err),
 		};
 
-		if let Some(tt) = tokens.next() {
+		if let Some(tt) = tts.next() {
 			panic!(
 				"Could not parse `{}` attribute of member {} - unexpected token {} after string literal",
 				attr_name, variant_ident, tt);
