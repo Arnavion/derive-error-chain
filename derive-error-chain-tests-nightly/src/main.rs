@@ -15,6 +15,7 @@ extern crate error_chain;
 fn main() {
 	macro_conflicts_use();
 	macro_conflicts_fully_qualified();
+	raw_path_chainable_link();
 	lambda_description_and_display_and_cause();
 	const_format_string_tuple_variants();
 	const_format_string_struct_variants();
@@ -84,6 +85,24 @@ fn macro_conflicts_fully_qualified() {
 			_ => unreachable!(),
 		},
 	}
+}
+
+fn raw_path_chainable_link() {
+	mod other_error {
+		#[derive(Debug, ErrorChain)]
+		pub enum ErrorKind {
+			Msg(String),
+		}
+	}
+
+	#[derive(Debug, ErrorChain)]
+	pub enum ErrorKind {
+		#[error_chain(link = other_error::Error)]
+		Another(other_error::ErrorKind),
+	}
+
+	let other_err: other_error::Error = other_error::ErrorKind::Msg("other error".to_string()).into();
+	let _: Error = other_err.into();
 }
 
 fn lambda_description_and_display_and_cause() {
