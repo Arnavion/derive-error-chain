@@ -1,3 +1,13 @@
+# v0.11.1 (2018-04-01)
+
+- The `ErrorKind` no longer needs to have `pub` visibility. The generated `Error`, `Result` and `ResultExt` items will have the same visibility as the `ErrorKind`.
+
+When the `proc_macro` nightly feature is enabled, the following new features become available. See the crate documentation for more details.
+
+- The `display` and `description` attributes can now have a raw function expression value instead of a string containing the function expression. Eg `#[error_chain(display = |e| write!(f, "http request returned an unsuccessful status code: {}", e))]`
+- Those `display` and `description` attributes that only contained a single call like `write!(f, ...)` can now use the `const()` shorthand. Eg `#[error_chain(description = const("Chainable's description"))]` and `#[error_chain(display = const("Custom's display: {code}"))]`.
+- The `link` attribute of chainable links can now have a raw path value instead of a string containing the path. Eg `#[error_chain(link = other_error::Error)]`.
+
 # v0.11.0 (2017-09-07)
 
 - BREAKING CHANGE: The enum attribute `#[derive(error_chain)]` is now `#[derive(ErrorChain)]` to comply with upcoming Rust changes - `#[derive(error_chain)]` would conflict with `#[error_chain(...)]` since the latter appears to be a valid attribute macro. The variant attribute `#[error_chain]` is unchanged, but check the "Conflicts with `error-chain` macros when the `proc_macro` feature is enabled" section in the docs for a caveat.
