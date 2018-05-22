@@ -14,9 +14,9 @@ documentation = "https://docs.rs/derive-error-chain"
 repository = "https://github.com/Arnavion/derive-error-chain"
 
 [dependencies]
-proc-macro2 = "0.3.x"
-quote = "0.5.x"
-syn = { version = "0.13.x", features = ["derive", "full", "printing"] }
+proc-macro2 = "0.4.x"
+quote = "0.6.x"
+syn = { version = "0.14.x", features = ["derive", "full", "printing"] }
 syntex_fmt_macros = "0.5.x"
 
 [dev-dependencies]

@@ -628,7 +628,7 @@ pub fn derive_error_chain(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 	let generics: std::collections::HashSet<_> =
 		ast.generics.params.iter()
 		.filter_map(|param|
-			if let syn::GenericParam::Type(syn::TypeParam { ident, .. }) = *param {
+			if let syn::GenericParam::Type(syn::TypeParam { ref ident, .. }) = *param {
 				Some(ident)
 			}
 			else {
@@ -895,20 +895,20 @@ This struct is made of three things:
 }
 
 struct TopLevelProperties {
-	error_kind_name: syn::Ident,
+	error_kind_name: proc_macro2::Ident,
 	error_kind_vis: syn::Visibility,
-	error_name: syn::Ident,
-	result_ext_name: syn::Ident,
-	result_name: Option<syn::Ident>,
-	error_chain_name: syn::Ident,
+	error_name: proc_macro2::Ident,
+	result_ext_name: proc_macro2::Ident,
+	result_name: Option<proc_macro2::Ident>,
+	error_chain_name: proc_macro2::Ident,
 	support_backtrace: bool,
 }
 
 impl<'a> From<&'a syn::DeriveInput> for TopLevelProperties {
 	fn from(ast: &'a syn::DeriveInput) -> Self {
-		let mut error_name: syn::Ident = "Error".into();
-		let mut result_ext_name: syn::Ident = "ResultExt".into();
-		let mut result_name: Option<syn::Ident> = Some("Result".into());
+		let mut error_name = proc_macro2::Ident::new("Error", proc_macro2::Span::call_site());
+		let mut result_ext_name = proc_macro2::Ident::new("ResultExt", proc_macro2::Span::call_site());
+		let mut result_name = Some(proc_macro2::Ident::new("Result", proc_macro2::Span::call_site()));
 		let mut support_backtrace = true;
 
 		for attr in &ast.attrs {
@@ -923,7 +923,7 @@ impl<'a> From<&'a syn::DeriveInput> for TopLevelProperties {
 							syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue { ident, lit: syn::Lit::Str(value), .. })) => {
 								let value = &value.value();
 
-								match ident.as_ref() {
+								match &*ident.to_string() {
 									"error" => error_name = syn::parse_str(value).unwrap_or_else(|err|
 										panic!("Could not parse `error` value as an identifier - {}", err)),
 
@@ -964,7 +964,7 @@ impl<'a> From<&'a syn::DeriveInput> for TopLevelProperties {
 			panic!("Could not generate error_chain crate name as a valid ident - {}", err));
 
 		TopLevelProperties {
-			error_kind_name: ast.ident,
+			error_kind_name: ast.ident.clone(),
 			error_kind_vis: ast.vis.clone(),
 			error_name,
 			result_ext_name,
@@ -976,7 +976,7 @@ impl<'a> From<&'a syn::DeriveInput> for TopLevelProperties {
 }
 
 struct Link {
-	variant_ident: syn::Ident,
+	variant_ident: proc_macro2::Ident,
 	variant_fields: syn::Fields,
 	link_type: LinkType,
 	custom_description: Option<CustomFormatter>,
@@ -1035,7 +1035,7 @@ impl From<syn::Variant> for Link {
 			if let Some(syn::Meta::List(syn::MetaList { nested, .. })) = attr.interpret_meta() {
 				for nested_meta in nested {
 					match nested_meta {
-						syn::NestedMeta::Meta(syn::Meta::Word(ident)) => match ident.as_ref() {
+						syn::NestedMeta::Meta(syn::Meta::Word(ident)) => match &*ident.to_string() {
 							"foreign" => match variant_fields {
 								syn::Fields::Unnamed(syn::FieldsUnnamed { ref unnamed, .. }) if unnamed.len() == 1 =>
 									link_type = Some(LinkType::Foreign(unnamed[0].ty.clone())),
@@ -1053,7 +1053,7 @@ impl From<syn::Variant> for Link {
 						syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue { ident, lit: syn::Lit::Str(value), .. })) => {
 							let value = &value.value();
 
-							match ident.as_ref() {
+							match &*ident.to_string() {
 								"link" => match variant_fields {
 									syn::Fields::Unnamed(syn::FieldsUnnamed { ref unnamed, .. }) if unnamed.len() == 1 =>
 										link_type = Some(LinkType::Chainable(
@@ -1101,14 +1101,14 @@ impl From<syn::Variant> for Link {
 				};
 
 				let ident = match tts.next() {
-					Some(proc_macro2::TokenTree::Term(ident)) => ident,
+					Some(proc_macro2::TokenTree::Ident(ident)) => ident,
 					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected a term but got {}", variant_ident, tt),
 					None => panic!("Could not parse `error_chain` attribute of member {} - expected a term", variant_ident),
 				};
-				let ident = ident.as_str();
+				let ident = ident.to_string();
 
 				match tts.next() {
-					Some(proc_macro2::TokenTree::Op(op)) if op.op() == '=' => (),
+					Some(proc_macro2::TokenTree::Punct(ref punct)) if punct.as_char() == '=' => (),
 					Some(tt) => panic!("Could not parse `error_chain` attribute of member {} - expected `=` but got {}", variant_ident, tt),
 					None => panic!("Could not parse `error_chain` attribute of member {} - expected `=`", variant_ident),
 				}
@@ -1118,7 +1118,7 @@ impl From<syn::Variant> for Link {
 					panic!("Could not parse `error_chain` attribute of member {} - expected tokens after `=`", variant_ident);
 				}
 
-				match ident {
+				match &*ident {
 					"link" => match variant_fields {
 						syn::Fields::Unnamed(syn::FieldsUnnamed { ref unnamed, .. }) if unnamed.len() == 1 =>
 							link_type = Some(LinkType::Chainable(
@@ -1158,7 +1158,7 @@ impl From<syn::Variant> for Link {
 }
 
 impl Link {
-	fn error_kind_description(&self, error_kind_name: &syn::Ident) -> quote::Tokens {
+	fn error_kind_description(&self, error_kind_name: &proc_macro2::Ident) -> proc_macro2::TokenStream {
 		let variant_ident = &self.variant_ident;
 
 		match (self.custom_description.as_ref(), &self.link_type) {
@@ -1231,8 +1231,8 @@ impl Link {
 
 	fn error_kind_display_case(
 		&self,
-		error_kind_name: &syn::Ident,
-	) -> quote::Tokens {
+		error_kind_name: &proc_macro2::Ident,
+	) -> proc_macro2::TokenStream {
 		let variant_ident = &self.variant_ident;
 
 		match (self.custom_display.as_ref(), &self.link_type) {
@@ -1313,9 +1313,9 @@ impl Link {
 
 	fn error_kind_from_impl(
 		&self,
-		error_kind_name: &syn::Ident,
+		error_kind_name: &proc_macro2::Ident,
 		impl_generics: &syn::ImplGenerics, impl_generics_lifetime: &syn::ImplGenerics, ty_generics: &syn::TypeGenerics, where_clause: Option<&syn::WhereClause>,
-	) -> Option<quote::Tokens> {
+	) -> Option<proc_macro2::TokenStream> {
 		let variant_ident = &self.variant_ident;
 
 		match self.link_type {
@@ -1344,8 +1344,8 @@ impl Link {
 
 	fn error_cause_case(
 		&self,
-		error_kind_name: &syn::Ident,
-	) -> Option<quote::Tokens> {
+		error_kind_name: &proc_macro2::Ident,
+	) -> Option<proc_macro2::TokenStream> {
 		let variant_ident = &self.variant_ident;
 
 		#[cfg_attr(feature = "cargo-clippy", allow(match_same_arms))]
@@ -1383,10 +1383,10 @@ impl Link {
 
 	fn error_from_impl(
 		&self,
-		error_kind_name: &syn::Ident, error_name: &syn::Ident,
-		generics: &std::collections::HashSet<syn::Ident>,
+		error_kind_name: &proc_macro2::Ident, error_name: &proc_macro2::Ident,
+		generics: &std::collections::HashSet<&proc_macro2::Ident>,
 		impl_generics: &syn::ImplGenerics, impl_generics_lifetime: &syn::ImplGenerics, ty_generics: &syn::TypeGenerics, where_clause: Option<&syn::WhereClause>,
-	) -> Option<quote::Tokens> {
+	) -> Option<proc_macro2::TokenStream> {
 		let variant_ident = &self.variant_ident;
 
 		match self.link_type {
@@ -1425,7 +1425,7 @@ impl Link {
 		}
 	}
 
-	fn chained_error_extract_backtrace_case(&self) -> Option<quote::Tokens> {
+	fn chained_error_extract_backtrace_case(&self) -> Option<proc_macro2::TokenStream> {
 		match self.link_type {
 			LinkType::Chainable(ref error_ty, _) => Some(quote! {
 				if let Some(err) = err.downcast_ref::<#error_ty>() {
@@ -1441,12 +1441,12 @@ impl Link {
 }
 
 enum CustomFormatter {
-	FormatString { format_string: String, pattern: quote::Tokens, args: quote::Tokens },
+	FormatString { format_string: String, pattern: proc_macro2::TokenStream, args: proc_macro2::TokenStream },
 	Expr(syn::Expr),
 }
 
 impl CustomFormatter {
-	fn parse(tokens: proc_macro2::TokenStream, attr_name: &str, variant_ident: &syn::Ident, variant_fields: &syn::Fields) -> Self {
+	fn parse(tokens: proc_macro2::TokenStream, attr_name: &str, variant_ident: &proc_macro2::Ident, variant_fields: &syn::Fields) -> Self {
 		let err = match syn::parse(tokens.clone().into()) {
 			Ok(expr) => return CustomFormatter::Expr(expr),
 			Err(err) => err,
@@ -1455,7 +1455,7 @@ impl CustomFormatter {
 		let mut tts = tokens.into_iter();
 
 		match tts.next() {
-			Some(proc_macro2::TokenTree::Term(term)) if term.as_str() == "const" => (),
+			Some(proc_macro2::TokenTree::Ident(ref ident)) if ident == "const" => (),
 
 			Some(tt) => panic!(
 				"Could not parse `{}` attribute of member {}. Expression - {}. Format string - expected `const` but got {}",
@@ -1508,7 +1508,7 @@ impl CustomFormatter {
 						(quote!(ref #field_name), quote!(#field_name = #field_name,))
 					}
 					else {
-						let ignored_field_name: syn::Ident = format!("_{}", field_name).into();
+						let ignored_field_name = proc_macro2::Ident::new(&format!("_{}", field_name), proc_macro2::Span::call_site());
 						(quote!(#field_name: ref #ignored_field_name), quote!())
 					}
 				}).unzip();
@@ -1527,7 +1527,7 @@ impl CustomFormatter {
 
 				let (patterns, args): (Vec<_>, Vec<_>) = unnamed.into_iter().enumerate().map(|(i, _)| {
 					if referenced_positions.contains(&i) {
-						let field_name: syn::Ident = format!("value{}", i).into();
+						let field_name = proc_macro2::Ident::new(&format!("value{}", i), proc_macro2::Span::call_site());
 						(quote!(ref #field_name), quote!(#field_name,))
 					}
 					else {
@@ -1575,7 +1575,7 @@ fn is_closure(expr: &syn::Expr) -> bool {
 	}
 }
 
-fn fields_pattern(variant_fields: &syn::Fields) -> quote::Tokens {
+fn fields_pattern(variant_fields: &syn::Fields) -> proc_macro2::TokenStream {
 	match *variant_fields {
 		syn::Fields::Named(syn::FieldsNamed { ref named, .. }) => {
 			let fields = named.into_iter().map(|f| {
@@ -1587,7 +1587,7 @@ fn fields_pattern(variant_fields: &syn::Fields) -> quote::Tokens {
 
 		syn::Fields::Unnamed(syn::FieldsUnnamed { ref unnamed, .. }) => {
 			let fields = unnamed.into_iter().enumerate().map(|(i, _)| {
-				let field_name: syn::Ident = format!("value{}", i).into();
+				let field_name = proc_macro2::Ident::new(&format!("value{}", i), proc_macro2::Span::call_site());
 				quote!(ref #field_name)
 			});
 			quote!((#(#fields,)*))
@@ -1597,7 +1597,7 @@ fn fields_pattern(variant_fields: &syn::Fields) -> quote::Tokens {
 	}
 }
 
-fn fields_pattern_ignore(variant_fields: &syn::Fields) -> quote::Tokens {
+fn fields_pattern_ignore(variant_fields: &syn::Fields) -> proc_macro2::TokenStream {
 	match *variant_fields {
 		syn::Fields::Named(syn::FieldsNamed { .. }) => quote!({ .. }),
 		syn::Fields::Unnamed(_) => quote!((..)),
@@ -1605,7 +1605,7 @@ fn fields_pattern_ignore(variant_fields: &syn::Fields) -> quote::Tokens {
 	}
 }
 
-fn args(variant_fields: &syn::Fields) -> quote::Tokens {
+fn args(variant_fields: &syn::Fields) -> proc_macro2::TokenStream {
 	match *variant_fields {
 		syn::Fields::Named(syn::FieldsNamed { ref named, .. }) => {
 			let fields = named.into_iter().map(|f| {
@@ -1617,7 +1617,7 @@ fn args(variant_fields: &syn::Fields) -> quote::Tokens {
 
 		syn::Fields::Unnamed(syn::FieldsUnnamed { ref unnamed, .. }) => {
 			let fields = unnamed.into_iter().enumerate().map(|(i, _)| {
-				let field_name: syn::Ident = format!("value{}", i).into();
+				let field_name = proc_macro2::Ident::new(&format!("value{}", i), proc_macro2::Span::call_site());
 				quote!(#field_name)
 			});
 			quote!(#(#fields,)*)
@@ -1627,7 +1627,7 @@ fn args(variant_fields: &syn::Fields) -> quote::Tokens {
 	}
 }
 
-fn get_parameter_names(format_string: &str) -> Result<std::collections::HashSet<syn::Ident>, String> {
+fn get_parameter_names(format_string: &str) -> Result<std::collections::HashSet<proc_macro2::Ident>, String> {
 	let parser = syntex_fmt_macros::Parser::new(format_string);
 
 	parser
