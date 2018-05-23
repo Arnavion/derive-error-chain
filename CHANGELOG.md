@@ -1,3 +1,8 @@
+# v0.11.2 (2018-05-23)
+
+- Deps updated because of proc macro API breakage in nightly Rust. No API changes in `derive-error-chain` itself.
+
+
 # v0.11.1 (2018-04-01)
 
 - The `ErrorKind` no longer needs to have `pub` visibility. The generated `Error`, `Result` and `ResultExt` items will have the same visibility as the `ErrorKind`.
