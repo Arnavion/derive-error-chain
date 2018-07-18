@@ -137,10 +137,10 @@
 //!     A chainable link is an error and errorkind that have been generated using `error-chain` or `derive-error-chain`. The variant must have a single field
 //!     to hold the chained errorkind, and the `link` attribute must specify a path to the chained error.
 //!
-//!     When the `proc_macro` feature is enabled, the value of the `link` attribute does not need to be stringified:
+//!     When the `use_extern_macros` feature is enabled, the value of the `link` attribute does not need to be stringified:
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -240,10 +240,10 @@
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::description()`
 //!     - Custom links: Returns the stringified name of the variant.
 //!
-//!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
+//!     When the `use_extern_macros` feature is enabled, the value does not need to be stringified:
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -256,7 +256,7 @@
 //!     ```
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -272,10 +272,10 @@
 //!     # }
 //!     ```
 //!
-//!     When the `proc_macro` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
+//!     When the `use_extern_macros` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -336,10 +336,10 @@
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::fmt::Display::fmt()`
 //!     - Custom links: Writes the description of the variant to the formatter.
 //!
-//!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
+//!     When the `use_extern_macros` feature is enabled, the value does not need to be stringified:
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -352,7 +352,7 @@
 //!     ```
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -368,10 +368,10 @@
 //!     # }
 //!     ```
 //!
-//!     When the `proc_macro` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
+//!     When the `use_extern_macros` feature is enabled, closure expressions that only call `write!` on the `::std::fmt::Formatter` can instead use a shorthand:
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -385,7 +385,7 @@
 //!     ```
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -446,10 +446,10 @@
 //!     - Foreign links: Forwards to the foreign error's implementation of `::std::error::Error::cause()`
 //!     - Custom links: Returns `None`
 //!
-//!     When the `proc_macro` feature is enabled, the value does not need to be stringified:
+//!     When the `use_extern_macros` feature is enabled, the value does not need to be stringified:
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -462,7 +462,7 @@
 //!     ```
 //!
 //!     ```
-//!     # #![feature(proc_macro)]
+//!     # #![feature(use_extern_macros)]
 //!     #
 //!     # #[macro_use] extern crate derive_error_chain;
 //!     #
@@ -478,12 +478,12 @@
 //!     # }
 //!     ```
 //!
-//! # Conflicts with `error-chain` macros when the `proc_macro` feature is enabled
+//! # Conflicts with `error-chain` macros when the `use_extern_macros` feature is enabled
 //!
-//! If you have the `proc_macro` feature enabled and have code like this:
+//! If you have the `use_extern_macros` feature enabled and have code like this:
 //!
 //! ```compile_fail
-//! #![feature(proc_macro)]
+//! #![feature(use_extern_macros)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
 //! #[macro_use] extern crate error_chain; // Want to use `bail!` and `quick_main!`
@@ -515,7 +515,7 @@
 //! To work around this, don't use `#[macro_use]` with the `error-chain` crate. Instead, either `use` the macros you need from it:
 //!
 //! ```
-//! #![feature(proc_macro)]
+//! #![feature(use_extern_macros)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
 //! extern crate error_chain;
@@ -536,7 +536,7 @@
 //! or fully qualify their paths:
 //!
 //! ```
-//! #![feature(proc_macro)]
+//! #![feature(use_extern_macros)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
 //! extern crate error_chain;
@@ -556,7 +556,7 @@
 //! and other macros it uses must also be imported, even though they're an implementation detail:
 //!
 //! ```
-//! #![feature(proc_macro)]
+//! #![feature(use_extern_macros)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
 //! extern crate error_chain;
@@ -576,7 +576,7 @@
 //! To use it fully-qualified, the macros it depends on must still be `use`d to bring them into scope:
 //!
 //! ```
-//! #![feature(proc_macro)]
+//! #![feature(use_extern_macros)]
 //!
 //! #[macro_use] extern crate derive_error_chain;
 //! extern crate error_chain;
@@ -593,7 +593,7 @@
 //! }
 //! ```
 //!
-//! It's possible this experience will be made better before the `proc_macro` feature stabilizes.
+//! It's possible this experience will be made better before the `use_extern_macros` feature stabilizes.
 
 extern crate proc_macro;
 extern crate proc_macro2;

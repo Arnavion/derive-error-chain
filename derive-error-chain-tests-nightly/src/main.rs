@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-#![feature(proc_macro)]
+#![feature(use_extern_macros)]
 
 //! Test crate for derive-error-chain. If it runs, it's tested.
 
