@@ -1,3 +1,7 @@
+This crate is no longer maintained.
+
+---
+
 # derive-error-chain
 
 [![Build Status](https://travis-ci.org/Arnavion/derive-error-chain.svg?branch=master)](https://travis-ci.org/Arnavion/derive-error-chain)
