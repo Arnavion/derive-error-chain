@@ -1,5 +1,7 @@
 This crate is no longer maintained.
 
+If you have questions about this repository, open an issue at https://github.com/Arnavion/archived-repos-issues
+
 ---
 
 # derive-error-chain
